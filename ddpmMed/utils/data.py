@@ -4,7 +4,6 @@ from PIL import Image
 import blobfile as bf
 import tifffile as tiff
 from typing import Union, Any
-from ddpmMed.data import ImageDataset
 from torch.utils.data import DataLoader
 
 
@@ -90,26 +89,27 @@ def normalize(x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Ten
     return x
 
 
-def load_data(data_dir: str, image_size: int, transforms: Any, batch_size: int, deterministic: bool = False,
-              seed: int = 42, device: str = 'cuda'):
-    """
-    Creates a generator over a dataset that cycles continuously over all data entries
-
-    :param data_dir: dataset directory, folder containing images
-    :param image_size: image size for transformed images, ignore if transforms is specified
-    :param transforms: a transforms object, a list of transformations for input images
-    :param batch_size: data loader's batch size
-    :param deterministic: either to shuffle or avoid shuffling the dataloader
-    :param seed: random seed
-    :param device: device to move images to
-    :return: a cycling generator over the entire dataset entries
-    """
-    # create dataset object
-    dataset = ImageDataset(images_dir=data_dir, image_size=image_size, transforms=transforms, seed=seed, device=device)
-
-    # create dataloader
-    loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=(not deterministic))
-
-    # cycle over all data
-    while True:
-        yield from loader
+# def load_data(data_dir: str, image_size: int, transforms: Any, batch_size: int, deterministic: bool = False,
+#               seed: int = 42, device: str = 'cuda'):
+#     """
+#     Creates a generator over a dataset that cycles continuously over all data entries
+#
+#     :param data_dir: dataset directory, folder containing images
+#     :param image_size: image size for transformed images, ignore if transforms is specified
+#     :param transforms: a transforms object, a list of transformations for input images
+#     :param batch_size: data loader's batch size
+#     :param deterministic: either to shuffle or avoid shuffling the dataloader
+#     :param seed: random seed
+#     :param device: device to move images to
+#     :return: a cycling generator over the entire dataset entries
+#     """
+#     # create dataset object
+#     dataset = ImageDataset(images_dir=data_dir, image_size=image_size,
+#     transforms=transforms, seed=seed, device=device)
+#
+#     # create dataloader
+#     loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=(not deterministic))
+#
+#     # cycle over all data
+#     while True:
+#         yield from loader

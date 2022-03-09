@@ -1,10 +1,11 @@
 import torch
 import blobfile as bf
 from typing import Tuple, Union
-import ddpmMed.data.transforms as t
-from torch.utils.data import Dataset
-from ddpmMed.data.utils import imread
 import torchvision.transforms as Tr
+from torch.utils.data import Dataset
+
+import ddpmMed.data.transforms as t
+from ddpmMed.utils.data import imread
 
 
 class SegmentationDataset(Dataset):

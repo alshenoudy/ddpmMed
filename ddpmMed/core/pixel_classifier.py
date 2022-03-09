@@ -1,7 +1,9 @@
-from typing import List
-
+import os
 import torch
+import numpy as np
 from torch import nn
+from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 
 class Classifier(nn.Module):
@@ -49,3 +51,82 @@ class Classifier(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
+
+
+class Ensemble:
+    """
+    An ensemble of classifiers
+    """
+    def __init__(self,
+                 in_features: int,
+                 num_classes: int,
+                 size: int = 10,
+                 init_weights: str = "random") -> None:
+
+        self.in_features = in_features
+        self.num_classes = num_classes
+        self.size = size
+        self.init_weights = init_weights.lower()
+        self.ensemble = []
+        self.softmax = nn.Softmax(dim=1)
+        init_functions = ['normal', 'xavier', 'kaiming', 'orthogonal']
+
+        # create ensemble
+        for i in range(0, self.size):
+
+            # create nth classifier object
+            classifier = Classifier(in_features=self.in_features,
+                                    num_classes=self.num_classes)
+
+            # initialize weights accordingly
+            if self.init_weights == "random":
+                classifier.init_weights(init_type=np.random.choice(init_functions))
+            else:
+                classifier.init_weights(init_type=self.init_weights)
+
+            self.ensemble.append(classifier)
+        print(f"Created ensemble with {self.size} classifiers\n")
+
+    def train(self,
+              epochs: int,
+              data: DataLoader,
+              lr: float = 0.0001,
+              cache_folder: str = os.getcwd()):
+        """
+        Trains each classifier in an ensemble, uses Adam as an optimizer
+        """
+        # define criterion and cache dir
+        criterion = nn.CrossEntropyLoss()
+        cache_folder = os.path.join(cache_folder, "Ensemble")
+        os.makedirs(cache_folder, exist_ok=True)
+
+        # Train each classifier in ensemble separately
+        for i, classifier in enumerate(self.ensemble):
+
+            # define optimizer for current classifier
+            optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
+
+            with tqdm(range(0, epochs), pbar={"batch_loss": "N/A"}) as pbar:
+                pbar.set_description(f"Training Classifier: {i}")
+                for e in pbar:
+                    for x, y in data:
+                        optimizer.zero_grad()
+                        predictions = classifier(x)
+                        loss = criterion(predictions, y)
+                        loss.backward()
+                        optimizer.step()
+                        pbar.set_postfix({
+                            "batch_loss": "{:.6f}".format(loss.item())
+                        })
+
+                # save current model
+                torch.save(obj=classifier.state_dict(), f=os.path.join(cache_folder, f"classifier_{i}.pt"))
+
+    def predict(self, x: torch.Tensor):
+        """
+        Ensemble voting over pixels
+        """
+        x_pred = [torch.argmax(self.softmax(c(x)), dim=1) for c in self.ensemble]
+        x_pred = torch.stack(x_pred)
+        x_pred = torch.mode(x_pred, dim=0)[0]
+        return x_pred
