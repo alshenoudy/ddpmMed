@@ -3,7 +3,6 @@ import blobfile as bf
 from typing import Tuple, Union
 import torchvision.transforms as Tr
 from torch.utils.data import Dataset
-
 import ddpmMed.data.transforms as t
 from ddpmMed.utils.data import imread
 
@@ -166,7 +165,7 @@ class ImageDataset(Dataset):
                 Tr.Resize(self.image_size),
                 Tr.RandomHorizontalFlip(0.5),
                 Tr.CenterCrop(self.image_size),
-                Tr.ToTensor(),
+                # Tr.ToTensor(),  # our imread directly returns a tensor
                 Tr.Lambda(lambda v: (v * 2) - 1)
             ])
         try:
@@ -183,4 +182,4 @@ class ImageDataset(Dataset):
         image_path = self.dataset[index]
         image = imread(image_path)
         image = self.transforms(image)
-        return image
+        return image, {}

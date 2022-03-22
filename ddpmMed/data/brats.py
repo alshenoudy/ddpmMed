@@ -6,7 +6,7 @@ from PIL import Image
 import tifffile as tiff
 import SimpleITK as itk
 from torch.utils.data import Dataset
-from ddpmMed.data import torch2np, normalize
+from ddpmMed.utils.data import torch2np, normalize
 
 
 class BRATS(Dataset):
