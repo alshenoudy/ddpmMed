@@ -57,6 +57,7 @@ class Ensemble:
     """
     An ensemble of classifiers
     """
+
     def __init__(self,
                  in_features: int,
                  num_classes: int,
@@ -87,6 +88,19 @@ class Ensemble:
             self.ensemble.append(classifier)
         print(f"Created ensemble with {self.size} classifiers\n")
 
+    def load_ensemble(self, ensemble_folder: str):
+        """ loads a pretrained ensemble from a directory """
+        if not os.path.exists(ensemble_folder):
+            raise FileExistsError(f" ensemble folder ({ensemble_folder}) does not exist")
+
+        classifiers = os.listdir(ensemble_folder)
+        classifiers = [os.path.join(ensemble_folder, c) for c in classifiers if c.split('.')[-1].lower() == 'pt']
+
+        if len(classifiers) != self.size:
+            raise RuntimeError(f"ensemble size and found classifiers do not match ({len(classifiers)} != {self.size})")
+        for i in range(0, self.size):
+            self.ensemble[i].load_state_dict(torch.load(classifiers[i]))
+
     def train(self,
               epochs: int,
               data: DataLoader,
@@ -106,8 +120,8 @@ class Ensemble:
             # define optimizer for current classifier
             optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
 
-            with tqdm(range(0, epochs), pbar={"batch_loss": "N/A"}) as pbar:
-                pbar.set_description(f"Training Classifier: {i}")
+            with tqdm(range(0, epochs), postfix={"batch_loss": "N/A"}) as pbar:
+                pbar.set_description(f"Training Classifier [{i}]")
                 for e in pbar:
                     for x, y in data:
                         optimizer.zero_grad()

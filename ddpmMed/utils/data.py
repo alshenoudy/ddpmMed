@@ -1,10 +1,14 @@
+import os.path
+
 import torch
 import numpy as np
 from PIL import Image
 import blobfile as bf
 import tifffile as tiff
-from typing import Union, Any
-from torch.utils.data import DataLoader
+from typing import Union, Any, List, Callable
+from torch.nn.functional import interpolate
+from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader, Dataset
 
 
 def imread(path: str):
@@ -87,3 +91,75 @@ def normalize(x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Ten
         raise NotImplementedError("Unsupported type: {}".format(type(x)))
 
     return x
+
+
+def dump_brats_dataset(dataset: Dataset, dump_folder: str):
+    """ Brats Specific dataset dump """
+
+    dump_folder = os.path.join(dump_folder, "dataset")
+    if not os.path.exists(dump_folder):
+        os.makedirs(dump_folder, exist_ok=True)
+
+    for i, (image, mask) in enumerate(dataset):
+        fig, ax = plt.subplots(1, 5)
+        ax[0].imshow(torch2np(image)[:, :, 0], cmap="gray")
+        ax[1].imshow(torch2np(image)[:, :, 1], cmap="gray")
+        ax[2].imshow(torch2np(image)[:, :, 2], cmap="gray")
+        ax[3].imshow(torch2np(image)[:, :, 3], cmap="gray")
+        ax[4].imshow(torch2np(mask), cmap="gray")
+
+        ax[0].set_title("T1")
+        ax[1].set_title("T1ce")
+        ax[2].set_title("T2")
+        ax[3].set_title("Flair")
+        ax[4].set_title("Ground Truth")
+
+        ax[0].set_axis_off()
+        ax[1].set_axis_off()
+        ax[2].set_axis_off()
+        ax[3].set_axis_off()
+        ax[4].set_axis_off()
+        plt.savefig(os.path.join(dump_folder, f"sample_{i}.jpeg"))
+        plt.close()
+
+
+def scale_features(activations: List[torch.Tensor], size: int):
+    """ Scales a list of activations to a given size """
+    assert all([isinstance(act, torch.Tensor) for act in activations])
+    resized = []
+    for features in activations:
+        resized.append(
+            interpolate(features, size, mode='bilinear', align_corners=False)[0]
+        )
+    return torch.cat(resized, dim=0)
+
+
+def prepare_brats_pixels(data: Any,
+                         feature_extractor: Callable,
+                         image_size: int,
+                         num_features: int):
+
+    image_size = (image_size, image_size)
+    x = torch.zeros((len(data), num_features, *image_size), dtype=torch.float32)
+    y = torch.zeros((len(data), *image_size), dtype=torch.uint8)
+
+    for i in range(0, len(data)):
+        image, mask = data[i]
+
+        # dimensions, and create a features list
+        c, h, w = image.shape
+        features = feature_extractor(image)
+        features = scale_features(features, h)
+        x[i] = features
+        y[i] = mask
+    x = x.permute(1, 0, 2, 3).reshape(num_features, -1).permute(1, 0)
+    y = y.flatten()
+    y = brats_labels(y)
+
+    return x, y
+
+
+def brats_labels(mask: torch.Tensor) -> torch.Tensor:
+    """ map brats labels """
+    mask[mask == 4] = 3
+    return mask

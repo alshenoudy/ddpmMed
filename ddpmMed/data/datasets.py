@@ -1,10 +1,10 @@
 import torch
 import blobfile as bf
-from typing import Tuple, Union
+from typing import Tuple, Union, Callable
 import torchvision.transforms as Tr
 from torch.utils.data import Dataset
 import ddpmMed.data.transforms as t
-from ddpmMed.utils.data import imread
+from ddpmMed.utils.data import imread, brats_labels
 
 
 class SegmentationDataset(Dataset):
@@ -25,7 +25,8 @@ class SegmentationDataset(Dataset):
                  image_size: int = 128,
                  transforms: Union[t.Compose, Tr.Compose] = None,
                  seed: int = 42,
-                 device: str = 'cpu') -> None:
+                 device: str = 'cpu',
+                 process_labels: Callable = brats_labels) -> None:
 
         self.images_dir = images_dir
         self.masks_dir = masks_dir
@@ -33,6 +34,7 @@ class SegmentationDataset(Dataset):
         self.seed = seed
         self.device = device
         self.transforms = transforms
+        self.map_labels = process_labels
         self.dataset = []
         self._ext = ['jpg', 'jpeg', 'tif', 'tiff', 'png']
 
@@ -106,6 +108,7 @@ class SegmentationDataset(Dataset):
 
         # apply transforms
         image, mask = self.transforms(image, mask)
+        mask = self.map_labels(mask)
 
         return image.to(self.device), mask.to(self.device)
 
