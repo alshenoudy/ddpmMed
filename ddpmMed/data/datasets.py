@@ -26,7 +26,8 @@ class SegmentationDataset(Dataset):
                  transforms: Union[t.Compose, Tr.Compose] = None,
                  seed: int = 42,
                  device: str = 'cpu',
-                 process_labels: Callable = brats_labels) -> None:
+                 process_labels: Callable = brats_labels,
+                 train: bool = True) -> None:
 
         self.images_dir = images_dir
         self.masks_dir = masks_dir
@@ -36,6 +37,7 @@ class SegmentationDataset(Dataset):
         self.transforms = transforms
         self.map_labels = process_labels
         self.dataset = []
+        self.train = train
         self._ext = ['jpg', 'jpeg', 'tif', 'tiff', 'png']
 
         # set seed manually
@@ -59,12 +61,12 @@ class SegmentationDataset(Dataset):
 
         all_images = bf.listdir(self.images_dir)
         all_images = [bf.join(self.images_dir, img) for img in all_images if img.split('.')[-1].lower() in self._ext]
+        if self.train:
+            all_masks = bf.listdir(self.masks_dir)
+            all_masks = [bf.join(self.masks_dir, msk) for msk in all_masks if msk.split('.')[-1].lower() in self._ext]
 
-        all_masks = bf.listdir(self.masks_dir)
-        all_masks = [bf.join(self.masks_dir, msk) for msk in all_masks if msk.split('.')[-1].lower() in self._ext]
-
-        if len(all_images) != len(all_masks):
-            raise RuntimeError(f"total images ({len(all_images)}) does not match total masks ({len(all_masks)})")
+            if len(all_images) != len(all_masks):
+                raise RuntimeError(f"total images ({len(all_images)}) does not match total masks ({len(all_masks)})")
         i = 0
         image_name, mask_name = "", ""
         try:
@@ -73,17 +75,24 @@ class SegmentationDataset(Dataset):
 
                 # get image and mask names
                 image_name = bf.basename(all_images[i]).split('.')[0].lower()
-                mask_name = bf.basename(all_masks[i]).split('.')[0].lower()
+                if self.train:
+                    mask_name = bf.basename(all_masks[i]).split('.')[0].lower()
 
-                # image name and mask name should be equivalent
-                if image_name != mask_name:
-                    raise NameError(f"image ({image_name}) and mask ({mask_name}) names are not matching")
+                    # image name and mask name should be equivalent
+                    if image_name != mask_name:
+                        raise NameError(f"image ({image_name}) and mask ({mask_name}) names are not matching")
 
-                # add items to dataset
-                self.dataset.append({
-                    'image': all_images[i],
-                    'mask': all_masks[i]
-                })
+                if self.train:
+                    # add items to dataset
+                    self.dataset.append({
+                        'image': all_images[i],
+                        'mask': all_masks[i]
+                    })
+                else:
+                    self.dataset.append({
+                        'image': all_images[i]
+                    })
+
                 print(f"\rCreating segmentation dataset [{i + 1}/{len(all_images)}]", end='', flush=True)
             print(f"\rCreated segmentation dataset with {len(all_images)} items\n\n")
 
@@ -104,7 +113,10 @@ class SegmentationDataset(Dataset):
 
         # read image and mask
         image = imread(image_path)
-        mask = imread(mask_path)
+        if self.train:
+            mask = imread(mask_path)
+        else:
+            mask = None
 
         # apply transforms
         image, mask = self.transforms(image, mask)

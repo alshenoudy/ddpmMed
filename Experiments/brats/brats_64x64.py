@@ -16,7 +16,7 @@ from matplotlib.lines import Line2D
 # Setup dataset and feature extractor
 config = brats_64x64_config()
 config["cache_dir"] = r"F:\diffusion"
-blocks = [19, 20]
+blocks = [18, 19, 20]
 
 dataset = SegmentationDataset(images_dir=r"E:\Datasets\BRATS\Stacked 2D BRATS Data\scans",
                               masks_dir=r"E:\Datasets\BRATS\Stacked 2D BRATS Data\masks",
@@ -29,11 +29,11 @@ feature_extractor = FeatureExtractorDDPM(steps=[100],
                                          config=config)
 
 # %% Define training pool, and train/test sets
-train_pool, test = random_split(dataset=dataset, lengths=[757, 8000],
-                                generator=torch.Generator().manual_seed(42))
+train_pool, val, test = random_split(dataset=dataset, lengths=[300, 457, 8000],
+                                     generator=torch.Generator().manual_seed(42))
 
-train, val = random_split(dataset=train_pool, lengths=[50, 707],
-                          generator=torch.Generator().manual_seed(77))
+train, _ = random_split(dataset=train_pool, lengths=[50, 250],
+                        generator=torch.Generator().manual_seed(1042))
 
 # Dump training data to visualize the content of the split
 dump_brats_dataset(dataset=train, dump_folder=r"F:\ddpmMed\Experiments\brats")
@@ -47,7 +47,7 @@ ensemble = Ensemble(in_features=256, num_classes=4, size=10, init_weights="norma
 # ensemble.load_ensemble(ensemble_folder=r"F:\ddpmMed\Experiments\brats\Ensemble")
 ensemble.train(epochs=8, data=pixel_dataloader, cache_folder=r"F:\ddpmMed\Experiments\brats")
 
-#%%
+# %%
 validation_folder = os.path.join(r"F:\ddpmMed\Experiments\brats", "validation")
 if not os.path.exists(validation_folder):
     os.makedirs(validation_folder, exist_ok=True)

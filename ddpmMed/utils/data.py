@@ -159,6 +159,44 @@ def prepare_brats_pixels(data: Any,
     return x, y
 
 
+def balance_labels(x: torch.Tensor, y: torch.Tensor):
+
+    # balance all labels
+    labels, counts = torch.unique(y, return_counts=True)
+    mean = counts[-1]
+
+    base = torch.ones_like(counts) * mean
+    size = base - counts
+
+    sampled_x = []
+    sampled_y = []
+    for label in labels:
+        label = label.item()
+        if size[label] != 0:
+            # new size for this label
+            new_size = counts[label] + size[label].item()
+            new_size = new_size.item()
+            if size[label] < 0:
+                new_x, new_y = x[y == label], y[y == label]
+                new_y = new_y.unsqueeze(-1)
+                total_length = len(new_y)
+                idxs = torch.randint(low=0, high=total_length, size=(new_size, 1)).squeeze()
+                new_x = torch.index_select(input=new_x, dim=0, index=idxs)
+                new_y = torch.index_select(input=new_y, dim=0, index=idxs)
+            else:
+                new_x, new_y = x[y == label], y[y == label]
+                new_y = new_y.unsqueeze(-1)
+                total_length = len(new_y)
+                tile = int(np.ceil(new_size/total_length)) + 1
+                new_x = torch.tile(new_x, (tile, 1))[0:new_size, :]
+                new_y = torch.tile(new_y, (tile, 1))[0:new_size, :]
+            sampled_x.append(new_x)
+            sampled_y.append(new_y)
+    sampled_x = torch.concat(sampled_x, dim=0)
+    sampled_y = torch.concat(sampled_y)
+    return sampled_x, sampled_y.squeeze()
+
+
 def brats_labels(mask: torch.Tensor) -> torch.Tensor:
     """ map brats labels """
     mask[mask == 4] = 3

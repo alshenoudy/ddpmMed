@@ -14,12 +14,13 @@ class BRATS(Dataset):
     A PyTorch Dataset utilized for Brain Tumor Segmentation Dataset
     """
 
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str, validation: bool = False) -> None:
         """
         Initializes the dataset using a path to all patient folders
         :param path (str): directory containing all patient scans
         """
         self.path = path
+        self.val = validation
         self.dataset = dict()
 
         # check for cuda
@@ -46,7 +47,7 @@ class BRATS(Dataset):
             folder_name = os.path.basename(folder)
 
             # Ensure every folder has 5 items/files
-            if len(os.listdir(folder)) != 5:
+            if len(os.listdir(folder)) != 5 and not self.val:
                 raise FileNotFoundError("One or more missing files in folder: {}.\n"
                                         "Check contents {}".format(folder_name, os.listdir(folder)))
 
@@ -55,23 +56,31 @@ class BRATS(Dataset):
             t1ce = glob.glob(os.path.join(folder, "{}_t1ce*".format(folder_name)))[0]
             t2 = glob.glob(os.path.join(folder, "{}_t2*".format(folder_name)))[0]
             flair = glob.glob(os.path.join(folder, "{}_flair*".format(folder_name)))[0]
-            label = glob.glob(os.path.join(folder, "{}_seg*".format(folder_name)))[0]
+            if not self.val:
+                label = glob.glob(os.path.join(folder, "{}_seg*".format(folder_name)))[0]
 
             # TODO: make sure all files are for the same patient
 
             # Save path for every MRI modality to dataset
-            self.dataset[index] = {
-                '3d': {
-                    "t1": t1,
-                    "t1ce": t1ce,
-                    "t2": t2,
-                    "flair": flair,
-                    "label": label
-                },
-                '2d': {
-
+            if self.val:
+                self.dataset[index] = {
+                    '3d': {
+                        "t1": t1,
+                        "t1ce": t1ce,
+                        "t2": t2,
+                        "flair": flair,
+                    }
                 }
-            }
+            else:
+                self.dataset[index] = {
+                    '3d': {
+                        "t1": t1,
+                        "t1ce": t1ce,
+                        "t2": t2,
+                        "flair": flair,
+                        "label": label
+                    }
+                }
             print("\rReading item(s) [{}/{}]".format(index, _total_items - 1), end="", flush=False)
         print("\nFinished Fetching all dataset items")
 
@@ -82,23 +91,34 @@ class BRATS(Dataset):
         """ Reads and returns data in 3D """
 
         data = self.dataset[index]['3d']
+
         try:
             # MRI modalities
             t1 = itk.ReadImage(data['t1'])
             t1ce = itk.ReadImage(data['t1ce'])
             t2 = itk.ReadImage(data['t2'])
             flair = itk.ReadImage(data['flair'])
-            label = itk.ReadImage(data['label'])
+            label = None
+            if not self.val:
+                label = itk.ReadImage(data['label'])
 
             # TODO: Torch can not cast uint16 to tensors, check labels after casting!
-            data = {
-                't1': torch.tensor(itk.GetArrayFromImage(t1), dtype=torch.float32).to(self.device),
-                't1ce': torch.tensor(itk.GetArrayFromImage(t1ce), dtype=torch.float32).to(self.device),
-                't2': torch.tensor(itk.GetArrayFromImage(t2), dtype=torch.float32).to(self.device),
-                'flair': torch.tensor(itk.GetArrayFromImage(flair), dtype=torch.float32).to(self.device),
-                'label': torch.tensor(itk.GetArrayFromImage(label).astype(dtype=np.int32),
-                                      dtype=torch.int32).to(self.device)
-            }
+            if self.val:
+                data = {
+                    't1': torch.tensor(itk.GetArrayFromImage(t1), dtype=torch.float32).to(self.device),
+                    't1ce': torch.tensor(itk.GetArrayFromImage(t1ce), dtype=torch.float32).to(self.device),
+                    't2': torch.tensor(itk.GetArrayFromImage(t2), dtype=torch.float32).to(self.device),
+                    'flair': torch.tensor(itk.GetArrayFromImage(flair), dtype=torch.float32).to(self.device),
+                }
+            else:
+                data = {
+                    't1': torch.tensor(itk.GetArrayFromImage(t1), dtype=torch.float32).to(self.device),
+                    't1ce': torch.tensor(itk.GetArrayFromImage(t1ce), dtype=torch.float32).to(self.device),
+                    't2': torch.tensor(itk.GetArrayFromImage(t2), dtype=torch.float32).to(self.device),
+                    'flair': torch.tensor(itk.GetArrayFromImage(flair), dtype=torch.float32).to(self.device),
+                    'label': torch.tensor(itk.GetArrayFromImage(label).astype(dtype=np.int32),
+                                          dtype=torch.int32).to(self.device)
+                }
 
         except Exception as ex:
             raise RuntimeError("unable to read data at index: {} in dataset.\nError:{}".format(index, ex))
@@ -189,14 +209,14 @@ class BRATS(Dataset):
 
         # define output folders
         output_folder = os.path.join(output_path, 'Stacked 2D BRATS Data', 'scans')
-        labels_folder = os.path.join(output_path, 'Stacked 2D BRATS Data', 'masks')
+        if not self.val:
+            labels_folder = os.path.join(output_path, 'Stacked 2D BRATS Data', 'masks')
+            if not os.path.exists(labels_folder):
+                os.makedirs(labels_folder)
 
         # create directories even if it does not exist
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-
-        if not os.path.exists(labels_folder):
-            os.makedirs(labels_folder)
 
         # Generate stacked 2d images across every slice index
         slices = [70, 75, 80, 85, 90, 95, 100]
@@ -213,7 +233,8 @@ class BRATS(Dataset):
             t1ce = data['t1ce']
             t2 = data['t2']
             flair = data['flair']
-            label = data['label']
+            if not self.val:
+                label = data['label']
 
             # Export stacked images per slices
             for i in slices:
@@ -226,13 +247,21 @@ class BRATS(Dataset):
 
                 # Save images/masks in tiff with original format
                 out_file = os.path.join(output_folder, "{}_{}.{}".format(name, i, _ext))
-                label_file = os.path.join(labels_folder, "{}_{}.{}".format(name, i, _ext))
+                if not self.val:
+                    label_file = os.path.join(labels_folder, "{}_{}.{}".format(name, i, _ext))
                 if as_tensors:
                     torch.save(obj=stacked, f=out_file)
-                    torch.save(obj=label, f=label_file)
+                    if not self.val:
+                        torch.save(obj=label, f=label_file)
                 else:
                     tiff.imsave(file=out_file,
                                 data=normalize(torch2np(stacked)))
-                    tiff.imsave(file=label_file,
-                                data=torch2np(label[i, :, :]))
+                    if not self.val:
+                        tiff.imsave(file=label_file,
+                                    data=torch2np(label[i, :, :]))
             print("\rExporting scan [{}/{}]".format((index + 1), total), end='', flush=True)
+
+
+data = BRATS(path=r"E:\1. Datasets\BRATS\3D\Validation", validation=True)
+data.export_stack(output_path=r"E:\1. Datasets\BRATS\2D\Validation")
+
