@@ -30,7 +30,8 @@ class CenterCrop:
 
     def __call__(self, image, mask):
         image = F.center_crop(image, self.size)
-        mask = F.center_crop(mask, self.size)
+        if mask is not None:
+            mask = F.center_crop(mask, self.size)
         return image, mask
 
 
@@ -41,7 +42,8 @@ class RandomHorizontalFlip:
     def __call__(self, image, mask):
         if random.random() < self.flip_prob:
             image = F.hflip(image)
-            mask = F.hflip(mask)
+            if mask is not None:
+                mask = F.hflip(mask)
         return image, mask
 
 
@@ -51,7 +53,8 @@ class Resize:
 
     def __call__(self, image, mask):
         image = F.resize(image, self.size)
-        mask = F.resize(mask, self.size, interpolation=T.InterpolationMode.NEAREST)
+        if mask is not None:
+            mask = F.resize(mask, self.size, interpolation=T.InterpolationMode.NEAREST)
         return image, mask
 
 
@@ -60,7 +63,7 @@ class PILToTensor:
         if not isinstance(image, torch.Tensor):
             image = F.pil_to_tensor(image)
 
-        if not isinstance(mask, torch.Tensor):
+        if not isinstance(mask, torch.Tensor) and mask is not None:
             mask = torch.as_tensor(np.array(mask), dtype=torch.int64)
         return image, mask
 

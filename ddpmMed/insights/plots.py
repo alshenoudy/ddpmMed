@@ -5,6 +5,8 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from ddpmMed.utils.data import torch2np, normalize
+from ddpmMed.utils.palette import colorize
+from torch.nn.functional import interpolate
 
 
 def plot_modal(image: np.ndarray, fname: str, suptitle: str, titles: Optional[List[str]]):
@@ -33,4 +35,31 @@ def plot_modal(image: np.ndarray, fname: str, suptitle: str, titles: Optional[Li
     plt.suptitle(suptitle)
     plt.savefig(fname=fname, dpi=600)
     plt.close()
+
+
+def plot_result(prediction: torch.Tensor,
+                ground_truth: torch.Tensor,
+                palette: list = None,
+                file_name: str = None):
+    """
+    Plots a prediction vs mask and optionally
+    saves it to storage
+    """
+    fig, ax = plt.subplots(1, 2)
+    if palette is None:
+        ax[0].imshow(torch2np(prediction, squeeze=True))
+        ax[1].imshow(torch2np(ground_truth, squeeze=True))
+    else:
+        ax[0].imshow(colorize(prediction, palette))
+        ax[1].imshow(colorize(ground_truth, palette))
+
+    ax[0].set_axis_off()
+    ax[1].set_axis_off()
+
+    ax[0].set_title("Prediction")
+    ax[1].set_title("Ground Truth")
+
+    if file_name is not None:
+        plt.savefig(file_name, dpi=600)
+    return fig, ax
 

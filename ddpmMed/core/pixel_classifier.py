@@ -111,8 +111,9 @@ class Ensemble:
         """
         # define criterion and cache dir
         criterion = nn.CrossEntropyLoss()
-        cache_folder = os.path.join(cache_folder, "Ensemble")
-        os.makedirs(cache_folder, exist_ok=True)
+        cache_folder = os.path.join(cache_folder, "ensemble")
+        if not os.path.exists(cache_folder):
+            os.makedirs(cache_folder, exist_ok=True)
 
         # Train each classifier in ensemble separately
         for i, classifier in enumerate(self.ensemble):
