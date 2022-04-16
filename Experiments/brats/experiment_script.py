@@ -165,8 +165,6 @@ def brats_experiment(config: dict,
                             "ET": scores['jaccard'][2].item()
                         }
                     }
-                    if j == 10:
-                        break
 
             # Save metrics to a JSON file
             with open(os.path.join(seed_folder, "calculated_metrics.json"), 'w') as jf:
