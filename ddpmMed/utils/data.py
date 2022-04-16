@@ -163,7 +163,7 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
 
     # balance all labels
     labels, counts = torch.unique(y, return_counts=True)
-    mean = counts[-1]
+    mean = int(torch.mean(counts.float()).item())
 
     base = torch.ones_like(counts) * mean
     size = base - counts
@@ -172,7 +172,7 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
     sampled_y = []
     for label in labels:
         label = label.item()
-        if size[label] != 0:
+        if size[label] != 0 and label != 0:
             # new size for this label
             new_size = counts[label] + size[label].item()
             new_size = new_size.item()

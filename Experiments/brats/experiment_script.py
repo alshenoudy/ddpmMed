@@ -1,5 +1,6 @@
 import os
 import torch
+import json
 from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
 from ddpmMed.insights.plots import plot_result
@@ -10,6 +11,10 @@ from ddpmMed.data.datasets import SegmentationDataset, PixelDataset
 from ddpmMed.insights.metrics import SegmentationMetrics
 from ddpmMed.utils.palette import get_palette
 from ddpmMed.utils.data import dump_brats_dataset, scale_features, prepare_brats_pixels, balance_labels
+
+import warnings
+
+warnings.filterwarnings('ignore')
 
 
 def brats_experiment(config: dict,
@@ -89,7 +94,7 @@ def brats_experiment(config: dict,
         x_data, y_data = prepare_brats_pixels(data=train, feature_extractor=feature_extractor,
                                               image_size=image_size, num_features=num_features)
 
-        # x_data, y_data = balance_labels(x_data, y_data)
+        x_data, y_data = balance_labels(x_data, y_data)
 
         pixel_dataset = PixelDataset(x_data=x_data, y_data=y_data)
         pixel_dataloader = DataLoader(dataset=pixel_dataset, batch_size=32, shuffle=True)
@@ -101,17 +106,72 @@ def brats_experiment(config: dict,
 
         # compute metrics for this split on test data
         metrics = SegmentationMetrics(num_classes=4, include_background=False)
+
+        # dictionary to save all metrics
+        all_metrics = {}
         with tqdm(enumerate(test), total=test_size) as pbar:
             for j, (image, mask) in pbar:
+
+                # test non empty masks
                 if len(torch.unique(mask)) > 1:
+
+                    # image name for further reference
+                    image_name = os.path.basename(dataset.dataset[test.indices[j]]["image"])
+
+                    # Predict on image
                     features = scale_features(feature_extractor(image), size=image_size)
                     features = features.reshape(num_features, (image_size * image_size)).T
                     pred = ensemble.predict(features.cpu()).reshape(image_size, image_size)
-                    plot_result(prediction=pred, ground_truth=mask, palette=p,
-                                file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"))
 
-                    #mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)
-                    # print(mean_scores, scores)
+                    # calculate metrics
+                    mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)
+
+                    # Caption figure
+                    caption = f"Dice Scores:\n" \
+                              f"{'-' * 25}\n" \
+                              f"mean: {mean_scores['mean_dice'].item():.3f} TC:{scores['dice'][0].item():.3f} " \
+                              f"IT:{scores['dice'][1].item():.3f} and TC: {scores['dice'][0].item():.3f}\n\n" \
+                              f"HD 95 Distances:\n" \
+                              f"{'-' * 25}\n" \
+                              f"mean: {mean_scores['mean_hd95'].item():.3f} TC:{scores['hd95'][0].item():.3f} " \
+                              f"IT:{scores['hd95'][1].item():.3f} and TC: {scores['hd95'][0].item():.3f}\n\n" \
+                              f"Jaccard Scores:\n" \
+                              f"{'-' * 25}\n" \
+                              f"mean: {mean_scores['mean_jaccard'].item():.3f} TC:{scores['jaccard'][0].item():.3f} " \
+                              f"IT:{scores['jaccard'][1].item():.3f} and TC: {scores['jaccard'][0].item():.3f}"
+
+                    plot_result(prediction=pred, ground_truth=mask, palette=p,
+                                file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
+                                caption=caption,
+                                fontsize=5)
+
+                    all_metrics[image_name] = {
+                        "dice": {
+                            "TC": scores['dice'][0].item(),
+                            "IT": scores['dice'][1].item(),
+                            "ET": scores['dice'][2].item()
+
+                        },
+
+                        "hd95": {
+                            "TC": scores['hd95'][0].item(),
+                            "IT": scores['hd95'][1].item(),
+                            "ET": scores['hd95'][2].item()
+                        },
+
+                        "jaccard": {
+                            "TC": scores['jaccard'][0].item(),
+                            "IT": scores['jaccard'][1].item(),
+                            "ET": scores['jaccard'][2].item()
+                        }
+                    }
+                    if j == 10:
+                        break
+
+            # Save metrics to a JSON file
+            with open(os.path.join(seed_folder, "calculated_metrics.json"), 'w') as jf:
+                json.dump(all_metrics, jf)
+            jf.close()
 
 
 # run experiment
@@ -126,6 +186,6 @@ brats_experiment(
     time_steps=[100],
     blocks=[18, 19, 20, 21],
     seeds=[16],
-    train_size=60,
-    epochs=8
+    train_size=50,
+    epochs=8,
 )

@@ -101,10 +101,10 @@ class SegmentationMetrics:
         }
 
         scores = {
-            "dice": dice,
-            "jaccard": iou,
+            "dice": dice.squeeze(),
+            "jaccard": iou.squeeze(),
             # "specificity": spec,
-            "hd95": hd95
+            "hd95": hd95.squeeze()
         }
 
         return mean_dict, scores

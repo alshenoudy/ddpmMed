@@ -40,7 +40,10 @@ def plot_modal(image: np.ndarray, fname: str, suptitle: str, titles: Optional[Li
 def plot_result(prediction: torch.Tensor,
                 ground_truth: torch.Tensor,
                 palette: list = None,
-                file_name: str = None):
+                file_name: str = None,
+                title: str = None,
+                caption: str = None,
+                fontsize: int = 14):
     """
     Plots a prediction vs mask and optionally
     saves it to storage
@@ -59,7 +62,14 @@ def plot_result(prediction: torch.Tensor,
     ax[0].set_title("Prediction")
     ax[1].set_title("Ground Truth")
 
+    if caption is not None:
+        fig.text(0.5, 0.05, caption, ha='left', fontsize=fontsize)
+
+    if title is not None:
+        fig.suptitle(title, fontsize=fontsize)
+
     if file_name is not None:
         plt.savefig(file_name, dpi=600)
+    plt.close()
     return fig, ax
 
