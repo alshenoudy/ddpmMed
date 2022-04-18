@@ -94,8 +94,6 @@ def brats_experiment(config: dict,
         x_data, y_data = prepare_brats_pixels(data=train, feature_extractor=feature_extractor,
                                               image_size=image_size, num_features=num_features)
 
-        x_data, y_data = balance_labels(x_data, y_data)
-
         pixel_dataset = PixelDataset(x_data=x_data, y_data=y_data)
         pixel_dataloader = DataLoader(dataset=pixel_dataset, batch_size=32, shuffle=True)
         ensemble = Ensemble(in_features=num_features, num_classes=4, size=10, init_weights="normal")

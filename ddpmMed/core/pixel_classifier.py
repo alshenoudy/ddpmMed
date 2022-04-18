@@ -62,13 +62,15 @@ class Ensemble:
                  in_features: int,
                  num_classes: int,
                  size: int = 10,
-                 init_weights: str = "random") -> None:
+                 init_weights: str = "random",
+                 device: str = 'cpu') -> None:
 
         self.in_features = in_features
         self.num_classes = num_classes
         self.size = size
         self.init_weights = init_weights.lower()
         self.ensemble = []
+        self.device = device
         self.softmax = nn.Softmax(dim=1)
         init_functions = ['normal', 'xavier', 'kaiming', 'orthogonal']
 
@@ -77,7 +79,7 @@ class Ensemble:
 
             # create nth classifier object
             classifier = Classifier(in_features=self.in_features,
-                                    num_classes=self.num_classes)
+                                    num_classes=self.num_classes).to(self.device)
 
             # initialize weights accordingly
             if self.init_weights == "random":
@@ -99,7 +101,7 @@ class Ensemble:
         if len(classifiers) != self.size:
             raise RuntimeError(f"ensemble size and found classifiers do not match ({len(classifiers)} != {self.size})")
         for i in range(0, self.size):
-            self.ensemble[i].load_state_dict(torch.load(classifiers[i]))
+            self.ensemble[i].load_state_dict(torch.load(classifiers[i], map_location=self.device))
 
     def train(self,
               epochs: int,

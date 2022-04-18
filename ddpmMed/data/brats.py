@@ -110,6 +110,15 @@ class BRATS(Dataset):
                     't2': torch.tensor(itk.GetArrayFromImage(t2), dtype=torch.float32).to(self.device),
                     'flair': torch.tensor(itk.GetArrayFromImage(flair), dtype=torch.float32).to(self.device),
                 }
+
+                data = {
+                    'volume': torch.cat([
+                        data['t1'].unsqueeze(0),
+                        data['t1ce'].unsqueeze(0),
+                        data['t2'].unsqueeze(0),
+                        data['flair'].unsqueeze(0)
+                    ])
+                }
             else:
                 data = {
                     't1': torch.tensor(itk.GetArrayFromImage(t1), dtype=torch.float32).to(self.device),
@@ -118,6 +127,15 @@ class BRATS(Dataset):
                     'flair': torch.tensor(itk.GetArrayFromImage(flair), dtype=torch.float32).to(self.device),
                     'label': torch.tensor(itk.GetArrayFromImage(label).astype(dtype=np.int32),
                                           dtype=torch.int32).to(self.device)
+                }
+                data = {
+                    'volume': torch.cat([
+                        data['t1'].unsqueeze(0),
+                        data['t1ce'].unsqueeze(0),
+                        data['t2'].unsqueeze(0),
+                        data['flair'].unsqueeze(0)
+                    ]),
+                    'label': data['label'].unsqueeze(0)
                 }
 
         except Exception as ex:
@@ -260,8 +278,4 @@ class BRATS(Dataset):
                         tiff.imsave(file=label_file,
                                     data=torch2np(label[i, :, :]))
             print("\rExporting scan [{}/{}]".format((index + 1), total), end='', flush=True)
-
-
-data = BRATS(path=r"E:\1. Datasets\BRATS\3D\Validation", validation=True)
-data.export_stack(output_path=r"E:\1. Datasets\BRATS\2D\Validation")
 
