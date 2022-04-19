@@ -41,7 +41,7 @@ def brats_experiment(config: dict,
     if results_folder is None:
         raise ValueError("expected 'cache_dir' to be a string but got None")
 
-    results_folder = os.path.join(results_folder, "results")
+    results_folder = os.path.join(results_folder, f"{train_size} samples - t{time_steps[0]}")
     os.makedirs(results_folder, exist_ok=True)
 
     # palette for plotting
@@ -124,24 +124,19 @@ def brats_experiment(config: dict,
                     # calculate metrics
                     mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)
 
-                    # Caption figure
-                    caption = f"Dice Scores:\n" \
-                              f"{'-' * 25}\n" \
-                              f"mean: {mean_scores['mean_dice'].item():.3f} TC:{scores['dice'][0].item():.3f} " \
-                              f"IT:{scores['dice'][1].item():.3f} and TC: {scores['dice'][0].item():.3f}\n\n" \
-                              f"HD 95 Distances:\n" \
-                              f"{'-' * 25}\n" \
-                              f"mean: {mean_scores['mean_hd95'].item():.3f} TC:{scores['hd95'][0].item():.3f} " \
-                              f"IT:{scores['hd95'][1].item():.3f} and TC: {scores['hd95'][0].item():.3f}\n\n" \
-                              f"Jaccard Scores:\n" \
-                              f"{'-' * 25}\n" \
-                              f"mean: {mean_scores['mean_jaccard'].item():.3f} TC:{scores['jaccard'][0].item():.3f} " \
-                              f"IT:{scores['jaccard'][1].item():.3f} and TC: {scores['jaccard'][0].item():.3f}"
-
-                    plot_result(prediction=pred, ground_truth=mask, palette=p,
-                                file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
-                                caption=caption,
-                                fontsize=5)
+                    # Caption figure caption = f"Dice Scores:\n" \ f"{'-' * 25}\n" \ f"mean: {mean_scores[
+                    # 'mean_dice'].item():.3f} TC:{scores['dice'][0].item():.3f} " \ f"IT:{scores['dice'][1].item(
+                    # ):.3f} and TC: {scores['dice'][0].item():.3f}\n\n" \ f"HD 95 Distances:\n" \ f"{'-' * 25}\n" \
+                    # f"mean: {mean_scores['mean_hd95'].item():.3f} TC:{scores['hd95'][0].item():.3f} " \ f"IT:{
+                    # scores['hd95'][1].item():.3f} and TC: {scores['hd95'][0].item():.3f}\n\n" \ f"Jaccard
+                    # Scores:\n" \ f"{'-' * 25}\n" \ f"mean: {mean_scores['mean_jaccard'].item():.3f} TC:{scores[
+                    # 'jaccard'][0].item():.3f} " \ f"IT:{scores['jaccard'][1].item():.3f} and TC: {scores[
+                    # 'jaccard'][0].item():.3f}"
+                    #
+                    # plot_result(prediction=pred, ground_truth=mask, palette=p,
+                    #             file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
+                    #             caption=caption,
+                    #             fontsize=5)
 
                     all_metrics[image_name] = {
                         "dice": {
@@ -168,20 +163,3 @@ def brats_experiment(config: dict,
             with open(os.path.join(seed_folder, "calculated_metrics.json"), 'w') as jf:
                 json.dump(all_metrics, jf)
             jf.close()
-
-
-# run experiment
-config = brats_128x128_config()
-config["cache_dir"] = r"F:\diffusion\128x128 model"
-brats_experiment(
-    config=config,
-    model_dir=r"F:\diffusion\128x128 model\model350000.pt",
-    images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
-    masks_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\masks",
-    image_size=128,
-    time_steps=[100],
-    blocks=[18, 19, 20, 21],
-    seeds=[16],
-    train_size=50,
-    epochs=8,
-)

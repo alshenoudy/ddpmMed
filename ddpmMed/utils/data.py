@@ -129,9 +129,9 @@ def scale_features(activations: List[torch.Tensor], size: int):
     resized = []
     for features in activations:
         resized.append(
-            interpolate(features, size, mode='bilinear', align_corners=False)
+            interpolate(features, size, mode='bilinear', align_corners=False)[0]
         )
-    return torch.cat(resized, dim=1)
+    return torch.cat(resized, dim=0)
 
 
 def prepare_brats_pixels(data: Any,
