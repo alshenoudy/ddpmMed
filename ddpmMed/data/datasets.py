@@ -26,7 +26,7 @@ class SegmentationDataset(Dataset):
                  transforms: Union[t.Compose, Tr.Compose] = None,
                  seed: int = 42,
                  device: str = 'cpu',
-                 process_labels: Callable = brats_labels,
+                 process_labels: Callable = None,
                  train: bool = True) -> None:
 
         self.images_dir = images_dir
@@ -35,7 +35,13 @@ class SegmentationDataset(Dataset):
         self.seed = seed
         self.device = device
         self.transforms = transforms
-        self.map_labels = process_labels
+
+        # labels processing
+        if process_labels is None:
+            self.map_labels = brats_labels
+        else:
+            self.map_labels = process_labels
+
         self.dataset = []
         self.train = train
         self._ext = ['jpg', 'jpeg', 'tif', 'tiff', 'png']
@@ -136,16 +142,18 @@ class PixelDataset(Dataset):
 
     def __init__(self,
                  x_data: torch.Tensor,
-                 y_data: torch.Tensor) -> None:
+                 y_data: torch.Tensor,
+                 device: str = 'cuda') -> None:
         self.x_data = x_data
         self.y_data = y_data
+        self.device = device
 
     def __len__(self) -> int:
         return len(self.x_data)
 
     def __getitem__(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
         """ returns a single pixel representation and it's target label """
-        return self.x_data[item], self.y_data[item]
+        return self.x_data[item].to(self.device), self.y_data[item].to(self.device)
 
 
 class ImageDataset(Dataset):

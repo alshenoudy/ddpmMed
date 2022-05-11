@@ -201,3 +201,25 @@ def brats_labels(mask: torch.Tensor) -> torch.Tensor:
     """ map brats labels """
     mask[mask == 4] = 3
     return mask
+
+
+def binary_brats(mask: torch.Tensor) -> torch.Tensor:
+    """ whole tumor for brats """
+    mask[mask > 0] = 1
+    return mask
+
+
+def brats_tumor_core(mask: torch.Tensor) -> torch.Tensor:
+    """tumor core for brats """
+    mask[mask == 4] = 3
+    mask[mask == 2] = 0
+    mask[mask > 1] = 1
+    return mask
+
+
+def brats_ET(mask: torch.Tensor) -> torch.Tensor:
+    """ Enhancing Tumor for brats"""
+    mask[mask == 4] = 3
+    mask[mask < 3] = 0
+    mask[mask > 1] = 1
+    return mask

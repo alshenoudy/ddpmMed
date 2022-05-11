@@ -19,6 +19,8 @@ def get_palette(dataset: str):
     dataset = dataset.lower()
     if dataset == 'brats':
         return BRATS
+    elif dataset == 'binary':
+        return BRATS_BINARY
     else:
         raise ValueError(f"unknown palette {dataset}")
 
@@ -31,9 +33,15 @@ currently using:
 """
 
 BRATS = [
-    45, 0, 55,          # 0: Background
-    20, 90, 139,        # 1: Tumor core (BLUE)
-    22, 159, 91,        # 2: Invaded Tissue (GREEN)
-    255, 232, 9         # 3: Enhancing Tumor (YELLOW)
+    45, 0, 55,  # 0: Background
+    20, 90, 139,  # 1: Tumor core (BLUE)
+    22, 159, 91,  # 2: Invaded Tissue (GREEN)
+    255, 232, 9  # 3: Enhancing Tumor (YELLOW)
+
+]
+
+BRATS_BINARY = [
+    45, 0, 55,  # 0: Background
+    255, 232, 9  # 3: Whole Tumor (YELLOW)
 
 ]

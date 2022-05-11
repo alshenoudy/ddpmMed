@@ -1,6 +1,6 @@
 import argparse
 import inspect
-
+from ddpmMed.diffusion.improved_ddpm import dist_util
 from ddpmMed.diffusion.improved_ddpm import gaussian_diffusion as gd
 from ddpmMed.diffusion.improved_ddpm.respace import SpacedDiffusion, space_timesteps
 from ddpmMed.diffusion.improved_ddpm.unet import UNetModel
@@ -226,6 +226,42 @@ def create_gaussian_diffusion(
         loss_type=loss_type,
         rescale_timesteps=rescale_timesteps,
     )
+
+
+def load_model(model_path: str, **kwargs):
+    dist_util.setup_dist()
+    config = kwargs.get("config")
+    model, diffusion = create_model_and_diffusion(
+        image_size=config.get("image_size", 128),
+        in_channels=config.get("in_channels", 3),
+        class_cond=config.get("class_cond", False),
+        learn_sigma=config.get("learn_sigma", False),
+        num_channels=config.get("model_channels", False),
+        num_res_blocks=config.get("num_resnet_blocks", 2),
+        channel_mult=config.get("channel_mult", "1, 2, 3, 4"),
+        num_heads=config.get("attention_heads", 4),
+        num_head_channels=-1,
+        num_heads_upsample=-1,
+        attention_resolutions=config.get("attention_resolutions", None),
+        dropout=config.get("dropout", 0),
+        diffusion_steps=config.get("diffusion_steps", 1000),
+        noise_schedule=config.get("noise_schedule", "cosine"),
+        timestep_respacing=config.get("timestep_respacing", ""),
+        use_kl=config.get("use_kl", False),
+        predict_xstart=config.get("predict_xstart", False),
+        rescale_timesteps=config.get("rescale_timesteps", False),
+        rescale_learned_sigmas=config.get("rescale_learned_sigmas", False),
+        use_checkpoint=config.get("use_checkpoint", False),
+        use_scale_shift_norm=config.get("use_scale_shift_norm", False),
+        resblock_updown=config.get("resblock_updown", False),
+        use_fp16=config.get("use_fp16", False),
+        use_new_attention_order=config.get("use_new_attention_order", False))
+
+    model.to(dist_util.dev())
+    model.load_state_dict(dist_util.load_state_dict(model_path, map_location=dist_util.dev()))
+    print("Loaded pretrained model...")
+
+    return model, diffusion
 
 
 def add_dict_to_argparser(parser, default_dict):
