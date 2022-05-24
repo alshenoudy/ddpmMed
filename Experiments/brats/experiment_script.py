@@ -143,7 +143,6 @@ def brats_experiment(config: dict,
                     features = features.reshape(num_features, (image_size * image_size)).T
                     pred = ensemble.predict(features.cpu()).reshape(image_size, image_size)
 
-                    print(pred.shape, mask.shape)
                     # calculate metrics
                     mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)
 

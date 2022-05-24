@@ -444,6 +444,7 @@ class UNetModel(nn.Module):
         use_scale_shift_norm=False,
         resblock_updown=False,
         use_new_attention_order=False,
+        freeze_encoder=False
     ):
         super().__init__()
 
@@ -465,6 +466,7 @@ class UNetModel(nn.Module):
         self.num_heads = num_heads
         self.num_head_channels = num_head_channels
         self.num_heads_upsample = num_heads_upsample
+        self._freeze_encoder = freeze_encoder
 
         time_embed_dim = model_channels * 4
         self.time_embed = nn.Sequential(
@@ -651,12 +653,28 @@ class UNetModel(nn.Module):
             emb = emb + self.label_emb(y)
 
         h = x.type(self.dtype)
-        for module in self.input_blocks:
-            h = module(h, emb)
-            hs.append(h)
-        h = self.middle_block(h, emb)
+
+        if self._freeze_encoder:
+            with torch.no_grad():
+                for module in self.input_blocks:
+                    h = module(h, emb)
+                    hs.append(h)
+                h = self.middle_block(h, emb)
+        else:
+            for module in self.input_blocks:
+                h = module(h, emb)
+                hs.append(h)
+            h = self.middle_block(h, emb)
+
         for module in self.output_blocks:
             h = th.cat([h, hs.pop()], dim=1)
             h = module(h, emb)
         h = h.type(x.dtype)
         return self.out(h)
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+    def freeze_encoder(self):
+        self._freeze_encoder = True

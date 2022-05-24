@@ -128,7 +128,7 @@ class SegmentationDataset(Dataset):
         image, mask = self.transforms(image, mask)
         mask = self.map_labels(mask)
 
-        return image.to(self.device), mask.to(self.device)
+        return image.to(self.device), mask.to(self.device).long()
 
 
 class PixelDataset(Dataset):
