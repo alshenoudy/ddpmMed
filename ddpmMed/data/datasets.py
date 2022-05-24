@@ -156,6 +156,32 @@ class PixelDataset(Dataset):
         return self.x_data[item].to(self.device), self.y_data[item].to(self.device)
 
 
+class BalancedBratsPixelDataset(Dataset):
+
+    # TODO: complete the label balancing
+    """
+    Dataset class containing all pixel representations/features and
+    their corresponding labels
+
+    :param x_data: a flattened tensor with all pixels activations with a shape of (num_pixels, num_features)
+    :param y_data: a flattened tensor with all pixel labels with a shape of (num_pixels)
+    """
+
+    def __init__(self,
+                 x_data: torch.Tensor,
+                 y_data: torch.Tensor) -> None:
+        self.x_data = x_data
+        self.y_data = y_data
+        self.labels = [0, 1, 2, 3]
+
+    def __len__(self) -> int:
+        return len(self.x_data)
+
+    def __getitem__(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ returns a single pixel representation and it's target label """
+        return self.x_data[item], self.y_data[item]
+
+
 class ImageDataset(Dataset):
     def __init__(self,
                  images_dir: str,

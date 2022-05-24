@@ -109,8 +109,7 @@ class SegmentationMetrics:
 
         return mean_dict, scores
 
-    # TODO: implement sensitivity
-    # TODO: implement stat_scores at pixel level
+
 
 
 

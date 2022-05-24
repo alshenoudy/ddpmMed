@@ -2,10 +2,11 @@ import json
 
 import numpy as np
 import torch
+import json
 from torch.nn.functional import interpolate
 from torch import nn
 from sklearn.cluster import KMeans
-from .data import torch2np
+from ddpmMed.utils.data import torch2np
 
 
 def save_tensors(module: nn.Module, tensors, name: str) -> None:
@@ -48,6 +49,32 @@ def get_feature_clusters(x: torch.Tensor, output_size: int, clusters: int = 8):
     x = torch2np(x, squeeze=True).reshape((output_size * output_size), c)
     x = KMeans(n_clusters=clusters).fit_predict(x).reshape(output_size, output_size)
     return x
+
+
+def read_json_metrics(path: str, metrics: list = None, labels: list = None):
+
+    if metrics is None:
+        metrics = ['dice', 'hd95', 'jaccard']
+    if labels is None:
+        labels = ['TC', 'IT', 'ET']
+
+    with open(path, 'r') as jf:
+        json_data = json.load(jf)
+    jf.close()
+    mean_metrics = {k: {label: [] for label in labels} for k in metrics}
+
+    for key, val in json_data.items():
+        for m in metrics:
+            for l in labels:
+                value = json_data[key][m][l]
+                if value > 100:
+                    value = float('nan')
+                mean_metrics[m][l].append(value)
+
+    for key, val in mean_metrics.items():
+        for label in labels:
+            mean_metrics[key][label] = np.nanmean(mean_metrics[key][label])
+    return mean_metrics
 
 
 def metrics2str(mean_scores: dict, scores: dict, labels: list):

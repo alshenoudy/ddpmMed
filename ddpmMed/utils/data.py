@@ -138,7 +138,6 @@ def prepare_brats_pixels(data: Any,
                          feature_extractor: Callable,
                          image_size: int,
                          num_features: int):
-
     image_size = (image_size, image_size)
     x = torch.zeros((len(data), num_features, *image_size), dtype=torch.float32)
     y = torch.zeros((len(data), *image_size), dtype=torch.uint8)
@@ -160,7 +159,6 @@ def prepare_brats_pixels(data: Any,
 
 
 def balance_labels(x: torch.Tensor, y: torch.Tensor):
-
     # balance all labels
     labels, counts = torch.unique(y, return_counts=True)
     mean = int(torch.mean(counts.float()).item())
@@ -187,7 +185,7 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
                 new_x, new_y = x[y == label], y[y == label]
                 new_y = new_y.unsqueeze(-1)
                 total_length = len(new_y)
-                tile = int(np.ceil(new_size/total_length)) + 1
+                tile = int(np.ceil(new_size / total_length)) + 1
                 new_x = torch.tile(new_x, (tile, 1))[0:new_size, :]
                 new_y = torch.tile(new_y, (tile, 1))[0:new_size, :]
             sampled_x.append(new_x)
@@ -200,6 +198,11 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
 def brats_labels(mask: torch.Tensor) -> torch.Tensor:
     """ map brats labels """
     mask[mask == 4] = 3
+    return mask
+
+
+def combined_brats_labels(mask: torch.Tensor) -> torch.Tensor:
+    mask[mask > 0] = 1
     return mask
 
 
