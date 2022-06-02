@@ -4,86 +4,67 @@ import torch
 from torch.utils.data import random_split
 from ddpmMed.data.datasets import SegmentationDataset
 
-# split data into a training pool and a testing pool
-all_data = SegmentationDataset(images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
-                               masks_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\masks",
-                               image_size=128,
-                               transforms=None,
-                               seed=42)
 
-training_pool, test = random_split(dataset=all_data, lengths=[757, 8000],
-                                   generator=torch.Generator().manual_seed(42))
+def generate_split_json(images_dir: str, masks_dir: str, train_pool_size: int, train_size: int,
+                        test_size: int, output_dir: str, seeds: list) -> dict:
+    """
+    Generates a json file for data splits based on given seeds
 
-test_data_indices = test.indices
-train_data_indices = training_pool.indices
-data = {
-    'ImagesPoolTr': list(),
-    'ImagesTs': list(),
-    'LabelsPoolTr': list(),
-    'LabelsTs': list()
-}
-modalities = ['0000', '0001', '0002', '0003']
+    """
 
-for idx in test_data_indices:
-    brats_id = all_data.dataset[idx]['image']
-    brats_id = os.path.basename(brats_id)
-    brats_id = brats_id.split('.tif')[0]
-    brats_id = brats_id.split('_')
-    brats_id = f"{brats_id[0]}_{brats_id[1]}s{brats_id[-1]}"
-    data['labelsTs'].append(f"{brats_id}.nii.gz")
-    for m in modalities:
-        data['imagesTs'].append(f"{brats_id}_{m}.nii.gz")
+    # entire dataset
+    all_data = SegmentationDataset(images_dir=images_dir,
+                                   masks_dir=masks_dir,
+                                   image_size=128,
+                                   transforms=None,
+                                   seed=42)
 
-for idx in train_data_indices:
-    brats_id = all_data.dataset[idx]['image']
-    brats_id = os.path.basename(brats_id)
-    brats_id = brats_id.split('.tif')[0]
-    brats_id = brats_id.split('_')
-    brats_id = f"{brats_id[0]}_{brats_id[1]}s{brats_id[-1]}"
-    data['labelsTr'].append(f"{brats_id}.nii.gz")
-    for m in modalities:
-        data['imagesTr'].append(f"{brats_id}_{m}.nii.gz")
+    # first split (training_pool, test)
+    training_pool, test = random_split(dataset=all_data, lengths=[train_pool_size, test_size],
+                                       generator=torch.Generator().manual_seed(42))
+    data_output = {}
 
-with open('dataset_splits.json', 'w') as jf:
-    json.dump(data, jf)
-jf.close()
+    for seed in seeds:
 
-# %% save the different folds
-seeds = [16, 42, 256, 1024, 2048]
+        # split data into actual training set and validation set
+        training, validation = random_split(
+            dataset=training_pool, lengths=[train_size, (train_pool_size - train_size)],
+            generator=torch.Generator().manual_seed(seed))
 
-for seed in seeds:
-    train, val = random_split(dataset=training_pool, lengths=[50, 707],
-                              generator=torch.Generator().manual_seed(seed))
+        # dictionary holding IDs to cases/splits that will be used for identifying files later
+        data_output = {
+            'training': list(),
+            'testing': list()
+        }
 
-    data = {
-        'training': list(),
-        'validation': list()
-    }
-    train_idxs = train.indices
-    val_idxs = val.indices
+        train_indices = training.indices
+        test_indices = validation.indices
 
-    for tr_idx in train_idxs:
-        brats_id = all_data.dataset[tr_idx]['image']
-        brats_id = os.path.basename(brats_id)
-        brats_id = brats_id.split('.tif')[0]
-        brats_id = brats_id.split('_')
-        brats_id = f"{brats_id[0]}_{brats_id[1]}s{brats_id[-1]}"
-        data['training'].append({
-            'image': f"./imagesTr/{brats_id}.nii.gz",
-            'label': f"./labelsTr/{brats_id}.nii.gz"
-        })
+        for index in train_indices:
+            brats_id = all_data.dataset[index]['image']
+            brats_id = os.path.basename(brats_id).split('.')[0]
+            brats_id = brats_id.split('_')
+            brats_id = f"BraTS_{int(brats_id[1]):05d}s{int(brats_id[-1]):03d}"
+            data_output['training'].append(brats_id)
 
-    for val_idx in val_idxs:
-        brats_id = all_data.dataset[val_idx]['image']
-        brats_id = os.path.basename(brats_id)
-        brats_id = brats_id.split('.tif')[0]
-        brats_id = brats_id.split('_')
-        brats_id = f"{brats_id[0]}_{brats_id[1]}s{brats_id[-1]}"
-        data['validation'].append({
-            'image': f"./imagesTr/{brats_id}.nii.gz",
-            'label': f"./labelsTr/{brats_id}.nii.gz"
-        })
+        for index in test_indices:
+            brats_id = all_data.dataset[index]['image']
+            brats_id = os.path.basename(brats_id).split('.')[0]
+            brats_id = brats_id.split('_')
+            brats_id = f"BraTS_{int(brats_id[1]):05d}s{int(brats_id[-1]):03d}"
+            data_output['testing'].append(brats_id)
 
-    with open(f'dataset_splits_{seed}.json', 'w') as jf:
-        json.dump(data, jf)
-    jf.close()
+        with open(os.path.join(output_dir, f"dataset_split_{seed}.json"), 'w') as jf:
+            json.dump(data_output, jf)
+        jf.close()
+
+    return data_output
+
+
+# data = generate_split_json(images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
+#                            masks_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
+#                            output_dir=os.getcwd(),
+#                            train_pool_size=757, test_size=8000, train_size=50, seeds=[16, 42, 256, 1024, 2048])
+
+
+# TODO: add cmd line approach and proper argparse
