@@ -4,7 +4,7 @@ import torch
 import json
 from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
-from ddpmMed.insights.plots import plot_result
+from ddpmMed.insights.plots import plot_result, plot_debug
 from ddpmMed.core.pixel_classifier import Ensemble
 from Experiments.config import brats_128x128_config
 from ddpmMed.core.feature_extractor import FeatureExtractorDDPM
@@ -81,6 +81,8 @@ def brats_experiment(config: dict,
                                                  model_path=model_dir,
                                                  config=config)
 
+        model, diffusion = feature_extractor.get_model_and_diffusion()
+
         # dataset split to a training pool to sample training data from and a test set
         training_pool, test = random_split(dataset=dataset, lengths=[train_pool, test_size],
                                            generator=torch.Generator().manual_seed(42))
@@ -143,6 +145,14 @@ def brats_experiment(config: dict,
                     features = features.reshape(num_features, (image_size * image_size)).T
                     pred = ensemble.predict(features.cpu()).reshape(image_size, image_size)
 
+                    #  check model and x_start prediction from noisy input
+                    time = torch.tensor(time_steps[0]).cuda()
+                    time = time.unsqueeze(0)
+                    image_noisy = diffusion.q_sample(x_start=image.unsqueeze(0), t=time, noise=None)
+                    image_denoised = diffusion.p_sample(model=model, x=image_noisy, t=time)
+                    image_denoised = image_denoised['pred_xstart']
+
+
                     # calculate metrics
                     mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)
 
@@ -151,11 +161,21 @@ def brats_experiment(config: dict,
                         caption = metrics2str(mean_scores=mean_scores,
                                               scores=scores,
                                               labels=label_names)
+                        # print(f"prediction: {torch.unique(pred)}, gt: {torch.unique(mask)}\n\n")
+                        # plot_result(prediction=pred, ground_truth=mask, palette=None,
+                        #             file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
+                        #             caption=caption,
+                        #             fontsize=5)
 
-                        plot_result(prediction=pred, ground_truth=mask, palette=p,
-                                    file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
-                                    caption=caption,
-                                    fontsize=5)
+                        plot_debug(prediction=pred,
+                                   mask=mask,
+                                   images=(image,
+                                           image_noisy.squeeze(0),
+                                           image_denoised.squeeze(0)),
+                                   caption=None,
+                                   file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
+                                   fontsize=5
+                                   )
                     if len(label_names) > 1:
                         all_metrics[image_name] = {m: {l: scores[m][i].item() for i, l in enumerate(label_names)}
                                                    for m in scores.keys()}

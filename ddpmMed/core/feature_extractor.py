@@ -48,3 +48,6 @@ class FeatureExtractorDDPM(GenericFeatureExtractor):
                 block.activations = None
 
         return activations
+
+    def get_model_and_diffusion(self):
+        return self.model, self.diffusion
