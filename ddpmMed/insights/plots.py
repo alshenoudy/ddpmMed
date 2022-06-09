@@ -80,6 +80,7 @@ def plot_debug(prediction: torch.Tensor,
                caption: str = None,
                file_name: str = None,
                title: str = None,
+               palette: list = None,
                fontsize: int = 8):
 
     fig, ax = plt.subplots(4, 4)
@@ -115,19 +116,19 @@ def plot_debug(prediction: torch.Tensor,
             ax[3][i].set_ylabel("GT\Predictions", fontsize=8)
 
         if i == 3:
-            ax[i][0].imshow(torch2np(prediction, squeeze=True))
-            ax[i][1].imshow(torch2np(mask, squeeze=True))
+            ax[i][0].imshow(colorize(prediction, palette))
+            ax[i][1].imshow(colorize(mask, palette))
 
             ax[i][0].set_xlabel("Prediction", fontsize=8)
             ax[i][1].set_xlabel("Ground Truth", fontsize=8)
 
             ax[i][2].imshow(torch2np(normalize(image))[:, :, 0], cmap="gray")
-            pred = torch2np(prediction, squeeze=True)
+            pred = colorize(prediction, palette)
             ax[i][2].imshow(np.ma.masked_where(pred == 0, pred), alpha=0.7)
             ax[i][2].set_xlabel("Prediction Overlay", fontsize=8)
 
             ax[i][3].imshow(torch2np(normalize(image))[:, :, 0], cmap="gray")
-            gt = torch2np(mask, squeeze=True)
+            gt = colorize(mask, palette)
             ax[i][3].imshow(np.ma.masked_where(gt == 0, gt), alpha=0.7)
             ax[i][3].set_xlabel("GT Overlay", fontsize=8)
 

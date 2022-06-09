@@ -174,7 +174,8 @@ def brats_experiment(config: dict,
                                            image_denoised.squeeze(0)),
                                    caption=None,
                                    file_name=os.path.join(seg_folder, f"{j:5d}.jpeg"),
-                                   fontsize=5
+                                   fontsize=5,
+                                   palette=p
                                    )
                     if len(label_names) > 1:
                         all_metrics[image_name] = {m: {l: scores[m][i].item() for i, l in enumerate(label_names)}
