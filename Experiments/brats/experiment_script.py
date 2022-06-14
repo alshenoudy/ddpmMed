@@ -51,7 +51,7 @@ def brats_experiment(config: dict,
     if results_folder is None:
         raise ValueError("expected 'cache_dir' to be a string but got None")
 
-    results_folder = os.path.join(results_folder, f"{train_size} samples - t{time_steps[0]}")
+    results_folder = os.path.join(results_folder, f"{train_size} samples - t{time_steps}")
     os.makedirs(results_folder, exist_ok=True)
 
     # palette for plotting
@@ -151,7 +151,6 @@ def brats_experiment(config: dict,
                     image_noisy = diffusion.q_sample(x_start=image.unsqueeze(0), t=time, noise=None)
                     image_denoised = diffusion.p_sample(model=model, x=image_noisy, t=time)
                     image_denoised = image_denoised['pred_xstart']
-
 
                     # calculate metrics
                     mean_scores, scores = metrics.get_all_metrics(prediction=pred, ground_truth=mask)

@@ -4,6 +4,7 @@ import numpy as np
 from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from monai.losses import DiceLoss, DiceCELoss
 
 
 class Classifier(nn.Module):
@@ -112,7 +113,13 @@ class Ensemble:
         Trains each classifier in an ensemble, uses Adam as an optimizer
         """
         # define criterion and cache dir
-        criterion = nn.CrossEntropyLoss()
+        dice_ce_loss = DiceCELoss(
+            to_onehot_y=True,
+            softmax=True,
+            lambda_dice=0.88
+        )
+        criterion_0 = nn.CrossEntropyLoss()
+        criterion_1 = nn.CrossEntropyLoss(ignore_index=0)
         cache_folder = os.path.join(cache_folder, "ensemble")
         if not os.path.exists(cache_folder):
             os.makedirs(cache_folder, exist_ok=True)
@@ -129,7 +136,8 @@ class Ensemble:
                     for x, y in data:
                         optimizer.zero_grad()
                         predictions = classifier(x)
-                        loss = criterion(predictions, y)
+                        # loss = criterion_0(predictions, y) + (0.98 * criterion_1(predictions, y))
+                        loss = dice_ce_loss(predictions, y.unsqueeze(-1))
                         loss.backward()
                         optimizer.step()
                         pbar.set_postfix({
