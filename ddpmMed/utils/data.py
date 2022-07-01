@@ -96,7 +96,6 @@ def normalize(x: Union[np.ndarray, torch.Tensor]) -> Union[np.ndarray, torch.Ten
 def dump_brats_dataset(dataset: Dataset, dump_folder: str):
     """ Brats Specific dataset dump """
 
-    dump_folder = os.path.join(dump_folder, "dataset")
     if not os.path.exists(dump_folder):
         os.makedirs(dump_folder, exist_ok=True)
 
@@ -119,7 +118,7 @@ def dump_brats_dataset(dataset: Dataset, dump_folder: str):
         ax[2].set_axis_off()
         ax[3].set_axis_off()
         ax[4].set_axis_off()
-        plt.savefig(os.path.join(dump_folder, f"sample_{i}.jpeg"))
+        plt.savefig(os.path.join(dump_folder, f"sample_{i}.jpeg"), dpi=800, bbox_inches='tight')
         plt.close()
 
 
@@ -154,7 +153,6 @@ def prepare_brats_pixels(data: Any,
         y[i] = mask
     x = x.permute(1, 0, 2, 3).reshape(num_features, -1).permute(1, 0)
     y = y.flatten()
-    y = brats_labels(y)
 
     return x, y
 
@@ -199,8 +197,11 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
 
 def brats_labels(mask: torch.Tensor) -> torch.Tensor:
     """ map brats labels """
-    mask[mask == 4] = 3
-    return mask
+    mask_copy = torch.zeros_like(mask)
+    mask_copy[mask == 4] = 3
+    mask_copy[mask == 1] = 2
+    mask_copy[mask == 2] = 1
+    return mask_copy
 
 
 def binary_brats(mask: torch.Tensor) -> torch.Tensor:

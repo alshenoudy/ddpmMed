@@ -59,6 +59,13 @@ class SegmentationDataset(Dataset):
                 t.Lambda(lambda v: (v * 2) - 1)
             ])
 
+        self.transforms_test = t.Compose([
+                t.Resize(self.image_size),
+                t.CenterCrop(self.image_size),
+                t.PILToTensor(),
+                t.Lambda(lambda v: (v * 2) - 1)
+            ])
+
         # validate directories
         if not bf.exists(self.images_dir):
             raise FileExistsError("images directory does not exits")

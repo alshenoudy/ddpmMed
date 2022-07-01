@@ -4,8 +4,8 @@ import shutil
 
 
 source = r"C:\Users\aalsheno\Desktop\Brats_folds\all_Brats_data"
-destination = r"C:\Users\aalsheno\Desktop\Brats_folds"
-data_split = r"C:\Users\aalsheno\Desktop\Projects\ddpmMed\structured_experiments\dataset_splits_16.json"
+destination = r"E:\1. Datasets\2. BraTS 2D Exported\dst"
+data_split = r"F:\splits\dataset_split_16.json"
 seed = 16
 
 task_folder = os.path.join(destination, f'Task501_BraTS2Ds16')
@@ -44,7 +44,7 @@ for entry in data['training']:
         shutil.copy(file, os.path.join(imagesTr, base_name))
 
 
-for entry in data['validation']:
+for entry in data['testing']:
     name = os.path.basename(entry['image'])
     name = name.split('.nii.gz')[0]
     shutil.copy(

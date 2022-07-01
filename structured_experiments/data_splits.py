@@ -38,7 +38,7 @@ def generate_split_json(images_dir: str, masks_dir: str, train_pool_size: int, t
         }
 
         train_indices = training.indices
-        test_indices = validation.indices
+        test_indices = test.indices
 
         for index in train_indices:
             brats_id = all_data.dataset[index]['image']
@@ -61,10 +61,10 @@ def generate_split_json(images_dir: str, masks_dir: str, train_pool_size: int, t
     return data_output
 
 
-# data = generate_split_json(images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
-#                            masks_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
-#                            output_dir=os.getcwd(),
-#                            train_pool_size=757, test_size=8000, train_size=50, seeds=[16, 42, 256, 1024, 2048])
+data = generate_split_json(images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
+                           masks_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\masks",
+                           output_dir=r"F:\splits",
+                           train_pool_size=757, test_size=8000, train_size=50, seeds=[16, 42, 256, 1024, 2048])
 
 
 # TODO: add cmd line approach and proper argparse

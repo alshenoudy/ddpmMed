@@ -66,6 +66,66 @@ class BraTSMetrics:
         }
         return results
 
+    def calculate_all_brats(self, ground_truth: np.ndarray, prediction: np.ndarray):
+        # compute scores for background
+        mask_gt = (ground_truth == 0).astype(int)
+        mask_pred = (prediction == 0).astype(int)
+        dc_background = self.compute_dice(ground_truth=mask_gt, prediction=mask_pred)
+        hd95_background = self.compute_hd95(ground_truth=mask_gt, prediction=mask_pred)
+        spec_background = self.compute_specificity(ground_truth=mask_gt, prediction=mask_pred)
+        sens_background = self.compute_sensitivity(ground_truth=mask_gt, prediction=mask_pred)
+        del mask_gt, mask_pred
+
+        # compute scores for invaded tissue
+        mask_gt = (ground_truth == 1).astype(int)
+        mask_pred = (prediction == 1).astype(int)
+        dc_non_enhancing = self.compute_dice(ground_truth=mask_gt, prediction=mask_pred)
+        hd95_non_enhancing = self.compute_hd95(ground_truth=mask_gt, prediction=mask_pred)
+        spec_non_enhancing = self.compute_specificity(ground_truth=mask_gt, prediction=mask_pred)
+        sens_non_enhancing = self.compute_sensitivity(ground_truth=mask_gt, prediction=mask_pred)
+        del mask_gt, mask_pred
+
+        # compute scores for tumor core
+        mask_gt = (ground_truth == 2).astype(int)
+        mask_pred = (prediction == 2).astype(int)
+        dc_core = self.compute_dice(ground_truth=mask_gt, prediction=mask_pred)
+        hd95_core = self.compute_hd95(ground_truth=mask_gt, prediction=mask_pred)
+        spec_core = self.compute_specificity(ground_truth=mask_gt, prediction=mask_pred)
+        sens_core = self.compute_sensitivity(ground_truth=mask_gt, prediction=mask_pred)
+        del mask_gt, mask_pred
+
+        # compute scores for enhancing tumor
+        mask_gt = (ground_truth == 3).astype(int)
+        mask_pred = (prediction == 3).astype(int)
+        dc_enhancing = self.compute_dice(ground_truth=mask_gt, prediction=mask_pred)
+        hd95_enhancing = self.compute_hd95(ground_truth=mask_gt, prediction=mask_pred)
+        spec_enhancing = self.compute_specificity(ground_truth=mask_gt, prediction=mask_pred)
+        sens_enhancing = self.compute_sensitivity(ground_truth=mask_gt, prediction=mask_pred)
+        del mask_gt, mask_pred
+
+        results = {
+            'dice_BD': dc_background,
+            'hd95_BD': hd95_background,
+            'specificity_BD': spec_background,
+            'sensitivity_BD': sens_background,
+
+            'dice_IT': dc_non_enhancing,
+            'hd95_IT': hd95_non_enhancing,
+            'specificity_IT': spec_non_enhancing,
+            'sensitivity_IT': sens_non_enhancing,
+
+            'dice_TC': dc_core,
+            'hd95_TC': hd95_core,
+            'specificity_TC': spec_core,
+            'sensitivity_TC': sens_core,
+
+            'dice_ET': dc_enhancing,
+            'hd95_ET': hd95_enhancing,
+            'specificity_ET': spec_enhancing,
+            'sensitivity_ET': sens_enhancing
+        }
+        return results
+
     @staticmethod
     def compute_dice(ground_truth: np.ndarray, prediction: np.ndarray):
         """

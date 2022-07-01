@@ -1,3 +1,5 @@
+""" Based on https://github.com/MIC-DKFZ/nnUNet conversion to 2D files, modified and extended for BraTS-2D """
+import argparse
 import os
 import torch
 import json
@@ -65,6 +67,83 @@ def get_identifiers_from_splitted_files(folder: str):
     return uniques
 
 
+def _move_data(target_dir: str,
+               split: dict,
+               images_dir: str,
+               labels_dir: str,
+               modality_mapping: dict = None):
+    """
+
+    Args:
+        target_dir:
+        split:
+        images_dir:
+        labels_dir:
+        modality_mapping:
+
+    Returns:
+    """
+    if modality_mapping is None:
+        modality_mapping = {
+            't1': '0000',
+            't1ce': '0001',
+            't2': '0002',
+            'flair': '0003'
+        }
+
+    # create task folders
+    task_folder, images_tr, labels_tr, images_ts, labels_ts = _create_task_folder(root=target_dir)
+    print(f"\nCopying the exported slices to task folder")
+
+    for entry in split['training']:
+        images = os.path.join(images_dir, entry)
+        images = [f"{images}_{modality_mapping[key]}.nii.gz" for key in modality_mapping.keys()]
+
+        # copy image files and modalities
+        for im_file in images:
+            shutil.copy(
+                src=os.path.join(images_dir, im_file),
+                dst=images_tr
+            )
+
+        # copy label file
+        shutil.copy(
+            src=os.path.join(labels_dir, f"{entry}.nii.gz"),
+            dst=labels_tr
+        )
+
+    for entry in split['testing']:
+        name = os.path.join(images_dir, entry)
+        images = [f"{name}_{modality_mapping[key]}.nii.gz" for key in modality_mapping.keys()]
+
+        # copy images and modalities
+        for im_file in images:
+            shutil.copy(
+                src=os.path.join(images_dir, im_file),
+                dst=images_ts
+            )
+
+        # copy labels
+        shutil.copy(
+            src=os.path.join(labels_dir, f"{entry}.nii.gz"),
+            dst=labels_ts
+        )
+
+    generate_dataset_json(
+        output_file=os.path.join(task_folder, "dataset.json"),
+        imagesTr_dir=images_tr,
+        imagesTs_dir=images_ts,
+        modalities=tuple(modality_mapping.keys()),
+        labels={
+            0: 'background',
+            1: 'edema',
+            2: 'non-enhancing',
+            3: 'enhancing'
+        },
+        dataset_name='BraTS2021'
+    )
+
+
 def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str, modalities: Tuple,
                           labels: dict, dataset_name: str, sort_keys=True, license: str = "hands off!",
                           dataset_description: str = "",
@@ -118,8 +197,11 @@ def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str
     save_json(json_dict, os.path.join(output_file), sort_keys=sort_keys)
 
 
-def convert_brats_to_2d(dataset_path: str, target_dir: str, slices: list = None,
-                        split: Optional[Union[dict, str]] = None, size: int = 128) -> None:
+def convert_brats_to_2d(dataset_path: str,
+                        target_dir: str,
+                        slices: list = None,
+                        split: Optional[Union[dict, str]] = None,
+                        size: int = 128) -> None:
     """
     Converts BraTS2021 dataset from 3D to 2D format across different axial slices, and
     prepares it to be directly used with an nnUNet or similar structure to Medical Segmentation Decathlon
@@ -237,54 +319,10 @@ def convert_brats_to_2d(dataset_path: str, target_dir: str, slices: list = None,
                     f" {os.path.basename(patient)}, progress [{i + 1}/{total_cases}]", end='')
 
     # create task folders
-    task_folder, images_tr, labels_tr, images_ts, labels_ts = _create_task_folder(root=target_dir)
-    print(f"\nCopying the exported slices to task folder")
+    _move_data(target_dir=target_dir,
+               split=split,
+               images_dir=images_dir,
+               labels_dir=labels_dir,
+               modality_mapping=modality_mapping)
 
-    for entry in split['training']:
-        images = os.path.join(images_dir, entry)
-        images = [f"{images}_{modality_mapping[key]}.nii.gz" for key in modality_mapping.keys()]
-
-        # copy image files and modalities
-        for im_file in images:
-            shutil.copy(
-                src=os.path.join(images_dir, im_file),
-                dst=images_tr
-            )
-
-        # copy label file
-        shutil.copy(
-            src=os.path.join(labels_dir, f"{entry}.nii.gz"),
-            dst=labels_tr
-        )
-
-    for entry in split['testing']:
-        name = os.path.join(images_dir, entry)
-        images = [f"{name}_{modality_mapping[key]}.nii.gz" for key in modality_mapping.keys()]
-
-        # copy images and modalities
-        for im_file in images:
-            shutil.copy(
-                src=os.path.join(images_dir, im_file),
-                dst=images_ts
-            )
-
-        # copy labels
-        shutil.copy(
-            src=os.path.join(labels_dir, f"{entry}.nii.gz"),
-            dst=labels_ts
-        )
-
-    generate_dataset_json(
-        output_file=os.path.join(task_folder, "dataset.json"),
-        imagesTr_dir=images_tr,
-        imagesTs_dir=images_ts,
-        modalities=tuple(modality_mapping.keys()),
-        labels={
-            0: 'background',
-            1: 'edema',
-            2: 'non-enhancing',
-            3: 'enhancing'
-        },
-        dataset_name='BraTS2021'
-    )
     print(f"\nFinished exporting and splitting data")

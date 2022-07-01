@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+
+import matplotlib.pyplot as plt
 import torch
 import numpy as np
 from torch import nn
@@ -8,8 +10,12 @@ from tqdm import tqdm
 from collections import OrderedDict
 from torch.utils.data import DataLoader
 from ddpmMed.core.feature_extractor import FeatureExtractorDDPM
-from ddpmMed.utils.data import scale_features
+from ddpmMed.data.datasets import SegmentationDataset
+from ddpmMed.insights.metrics_update import BraTSMetrics
+from ddpmMed.insights.plots import plot_result
+from ddpmMed.utils.data import scale_features, torch2np
 from ddpmMed.core.pixel_classifier import Classifier
+from monai.losses import DiceCELoss
 
 
 class DiffusionMLPEnsemble:
@@ -31,6 +37,7 @@ class DiffusionMLPEnsemble:
     :param device: device to move ensemble to
     :param cache_dir: a string pointing to a directory to store intermediate results
     """
+
     def __init__(self,
                  time_steps: list,
                  layers: list,
@@ -64,13 +71,13 @@ class DiffusionMLPEnsemble:
         if not os.path.exists(self.cache_dir):
             raise FileExistsError(f"cache directory [{self.cache_dir}] does not exist!")
         else:
-            self.cache_dir = os.path.join(self.cache_dir, "diffusion_ensemble")
+            self.cache_dir = os.path.join(self.cache_dir, "Diffusion MLP Ensemble")
             os.makedirs(self.cache_dir, exist_ok=True)
 
         print(f"Using {self.cache_dir} as a cache directory ..\n")
 
         # create an ensemble folder
-        self.ensemble_path = os.path.join(self.cache_dir, f"MLP Ensemble")
+        self.ensemble_path = os.path.join(self.cache_dir, f"Ensemble")
         os.makedirs(self.ensemble_path, exist_ok=True)
 
         # define and create feature extractor
@@ -134,7 +141,39 @@ class DiffusionMLPEnsemble:
         with open(os.path.join(self.ensemble_path, f"ensemble_metadata.json"), 'w') as jf:
             json.dump(self.ensemble_metadata, jf)
         jf.close()
+
+        # save current classifier/ update ensemble
+        torch.save(
+            obj=self.ensemble,
+            f=os.path.join(self.ensemble_path, f"ensemble.pt")
+        )
         print(f"Created MLP Ensemble with {self.ensemble_size} MLPs")
+
+    def load_pretrained(self, path: str):
+        """
+        Loads a pretrained ensemble
+        Args:
+            path (str): string pointing to ensemble folder
+
+        Returns: None, loads trained ensemble from disk
+        """
+        self.ensemble_path = path
+        ensemble_metadata = os.path.join(self.ensemble_path, 'ensemble_metadata.json')
+
+        # load ensemble metadata
+        with open(ensemble_metadata, 'r') as jf:
+            ensemble_metadata = json.load(jf)
+            self.ensemble_metadata = ensemble_metadata
+        jf.close()
+
+        classifier_paths = [os.path.join(self.ensemble_path, f"classifier_{i}.pt")
+                            for i in range(1, self.ensemble_size + 1)]
+        classifier_paths = iter(classifier_paths)
+        for i in range(1, self.ensemble_size + 1):
+            self.ensemble[i].load_state_dict(
+                torch.load(f=next(classifier_paths),
+                           map_location=self.device)['model'])
+        print(f"Loaded pretrained ensemble located at {path}..\n\n")
 
     def train(self,
               train_data: DataLoader,
@@ -143,18 +182,30 @@ class DiffusionMLPEnsemble:
               lr: float = 0.0001,
               validate_every: int = 1,
               use_dice_loss: bool = True,
-              dice_loss_weight: float = 0.95,
-              ignore_background: bool = True
+              ce_weight: torch.Tensor = None,
+              lambda_dice: float = 1.,
+              lambda_ce: float = 1.,
+              use_softmax: bool = True,
+              use_sigmoid: bool = False,
+              include_background: bool = False
               ) -> None:
         """
         Trains the Diffusion MLP object
         """
         if use_dice_loss:
-            criterion = None
-        elif ignore_background:
-            criterion = nn.CrossEntropyLoss(ignore_index=0)
+            criterion = DiceCELoss(
+                include_background=include_background,
+                to_onehot_y=True,
+                sigmoid=use_sigmoid,
+                softmax=use_softmax,
+                ce_weight=ce_weight,
+                lambda_dice=lambda_dice,
+                lambda_ce=lambda_ce
+            )
         else:
-            criterion = nn.CrossEntropyLoss()
+            criterion = nn.CrossEntropyLoss(
+                weight=ce_weight,
+                ignore_index=-100 if include_background else 0)
 
         print(f"Training all Ensemble classifiers ..\n"
               f"{'==' * 25}\n")
@@ -167,12 +218,14 @@ class DiffusionMLPEnsemble:
             self.ensemble_metadata[i]['train_losses'] = list()
             self.ensemble_metadata[i]['validation_losses'] = list()
 
-            print(f"Started training classifier [{i}] ..\n")
-            with tqdm(range(0, epochs), postfix={"loss": "calculating .."}) as pbar:
+            print(f"\n\nStarted training classifier [{i}] ..")
+            with tqdm(range(0, epochs), postfix={"loss": "calculating .."}, leave=False) as pbar:
 
                 # epoch train/val losses
                 training_losses = list()
+                running_losses_tr = list()
                 validation_losses = list()
+                running_losses_val = list()
 
                 for e in pbar:
                     # one training step/epoch through entire data
@@ -180,51 +233,138 @@ class DiffusionMLPEnsemble:
                     for x, y in train_data:
                         optimizer.zero_grad()
                         predictions = classifier(x)
+                        if use_dice_loss:
+                            y = y.unsqueeze(-1)
                         loss = criterion(predictions, y)
                         loss.backward()
                         optimizer.step()
 
                         # log to console/progress bar
-                        training_losses.append(loss.item())
+                        running_losses_tr.append(loss.item())
+
                         pbar.set_postfix(
-                            {"loss": f"{training_losses[-1]:.8f}"}
+                            {"loss": f"{running_losses_tr[-1]:.8f}"}
                         )
+                    training_losses.append((e, np.mean(running_losses_tr)))
 
                     # one validation step based on validate_every
-                    if valid_data is not None:
-                        if e != 0 and e % validate_every == 0:
-                            pbar.set_description("Validating")
-                            with torch.no_grad():
-                                for x, y in valid_data:
-                                    predictions = classifier(x)
-                                    loss = criterion(predictions, y)
-                                    validation_losses.append(loss.item())
+                    if validate_every > 0:
+                        if valid_data is not None:
+                            if e != 0 and e % validate_every == 0:
+                                pbar.set_description("Validating")
+                                with torch.no_grad():
+                                    for x, y in valid_data:
+                                        predictions = classifier(x)
+                                        if use_dice_loss:
+                                            y = y.unsqueeze(-1)
+                                        loss = criterion(predictions, y)
+                                        running_losses_val.append(loss.item())
+                                        pbar.set_postfix(
+                                            {"loss": f"{running_losses_val[-1]:.8f}"}
+                                        )
+                                    validation_losses.append((e, np.mean(running_losses_val)))
 
                     # append to metadata for debugging/ reloading
-                    self.ensemble[i]['epoch'] = e
+                    self.ensemble_metadata[i]['epoch'] = e + 1
 
             # add train/val losses to ensemble_metadata
             self.ensemble_metadata[i]['train_losses'].append(training_losses)
             self.ensemble_metadata[i]['validation_losses'].append(validation_losses)
-            self.ensemble[i]['trained'] = True
+            self.ensemble_metadata[i]['trained'] = True
 
-            # save current classifier
-            torch.save(obj=self.ensemble,
-                       f=os.path.join(self.ensemble_path, f"ensemble.pt"))
-            print(f"Saved classifier [{i}] to ensemble file located at:"
-                  f" [{os.path.join(self.ensemble_path, f'ensemble.pt')}]")
+            # write over ensemble metadata
+            with open(os.path.join(self.ensemble_path, f"ensemble_metadata.json"), 'w') as jf:
+                json.dump(self.ensemble_metadata, jf)
+            jf.close()
+
+            # save classifier/ensemble
+            torch.save(
+                obj={
+                    'model': self.ensemble[i].state_dict()
+                },
+                f=os.path.join(self.ensemble_path, f"classifier_{i}.pt")
+            )
+        print(f"\n\nFinished training Ensemble \n\n")
 
     def predict(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Predict on an input image/tensor
+        Predict on an input image/tensor. First we extract features and do a voting
+        over all the pixels predicted from all classifiers
         """
+
+        # Extract features
         features = scale_features(self.feature_extractor(x), size=self.image_size)
-        features = features.reshape(self.in_features, (self.image_size, self.image_size)).T
-        x_pred = [torch.argmax(self.softmax(c(features))) for i, c in self.ensemble.items()]
+        features = features.reshape(self.in_features, (self.image_size * self.image_size)).T
+        features = features.to(self.device)
+
+        # Predict from features
+        x_pred = [torch.argmax(self.softmax(classifier(features)), dim=1) for i, classifier in self.ensemble.items()]
         x_pred = torch.stack(x_pred)
         x_pred = torch.mode(x_pred, dim=0)[0]
+        x_pred = x_pred.reshape(self.image_size, self.image_size)
 
         # delete features tensor
         del features
 
         return x_pred
+
+    def evaluate(self,
+                 data: SegmentationDataset,
+                 indices: list,
+                 filenames: list,
+                 plot_predictions: bool = True,
+                 save_to: str = None,
+                 as_np: bool = False):
+        """
+        Args:
+
+            plot_predictions:
+            data:
+            indices:
+            filenames:
+            save_to:
+            as_np:
+
+        Returns:
+        """
+
+        total_items = len(indices)
+        indices = iter(indices)
+        metrics = BraTSMetrics()
+        metrics_results = OrderedDict()
+        running_metrics = None
+
+        with tqdm(enumerate(indices), total=total_items) as pbar:
+            for i, idx in pbar:
+                x, y = data[idx]
+                filename = os.path.basename(data.dataset[idx]['mask'])
+
+                pred = self.predict(x)
+                metrics_results[filename] = metrics.calculate_all_brats(
+                    prediction=torch2np(pred),
+                    ground_truth=torch2np(y, squeeze=True)
+                )
+                if running_metrics is None:
+                    running_metrics = {key: [] for key in metrics_results[filename].keys()}
+                else:
+                    for key in metrics_results[filename].keys():
+                        running_metrics[key].append(metrics_results[filename][key])
+
+                # plot/save predictions, not saving saves a lot of disk space
+                if plot_predictions:
+                    plot_result(
+                        prediction=pred,
+                        ground_truth=y,
+                        palette=[
+                            45, 0, 55,  # 0: Background
+                            20, 90, 139,  # 1: Non Enhancing (BLUE)
+                            22, 159, 91,  # 2: Tumor Core (GREEN)
+                            255, 232, 9  # 3: Enhancing Tumor (YELLOW)
+                        ],
+                        file_name=os.path.join(save_to, f"{i:05d}.jpeg")
+                    )
+            metrics_results['mean'] = {key: np.nanmean(running_metrics[key]) for key in running_metrics.keys()}
+            with open(os.path.join(save_to, "prediction_scores.json"), 'w') as jf:
+                json.dump(metrics_results, jf)
+            jf.close()
+
