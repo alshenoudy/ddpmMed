@@ -285,12 +285,16 @@ def mlp_experiment(
             lr=learning_rate,
             validate_every=validate_every,
             use_dice_loss=False,
-            include_background=True)
+            include_background=True,
+            ce_weight=torch.tensor([0.1, 0.3, 0.3, 0.3]))
 
     # after training is complete remove unnecessary objects/params
     del x_valid_data, y_valid_data
     del pixel_train_data, pixel_train_dataloader
     del pixel_valid_data, pixel_valid_dataloader
+
+    # change transforms to test time
+    dataset.set_test_transforms()
 
     # evaluate ensemble
     if evaluate_val:
@@ -315,32 +319,3 @@ def mlp_experiment(
                               save_to=pred_test_dir)
         print(f"Evaluated Test Data\n\n")
 
-
-mlp_experiment(
-    configuration=brats_128x128_config(),
-    output_dir=r"F:\Structured Experiments",
-    model_dir=r"F:\diffusion\128x128 model\model350000.pt",
-    images_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\scans",
-    labels_dir=r"E:\1. Datasets\1. BRATS 2021\2D\Training\masks",
-    time_steps=[200],
-    layers=[16, 17, 18, 19],
-    seeds=(42, 16),
-    train_size=10,
-    validation_size=200,
-    test_size=8000,
-    train_pool=757,
-    learning_rate=0.0001,
-    epochs=8,
-    validate_every=-1,
-    evaluate_val=False,
-    evaluate_test=True,
-    plot_predictions=False,
-    batch_size=64,
-    num_classes=4,
-    ensemble_size=20,
-    initialization="normal",
-    dump_test=False,
-    dump_val=False,
-    dump_train=True,
-    device='cpu'
-)

@@ -1,3 +1,4 @@
+import glob
 import os
 from typing import List, Optional, Any, Tuple
 
@@ -6,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ddpmMed.utils.data import torch2np, normalize
 from ddpmMed.utils.palette import colorize
+import SimpleITK as sitk
 from torch.nn.functional import interpolate
 
 
@@ -82,7 +84,6 @@ def plot_debug(prediction: torch.Tensor,
                title: str = None,
                palette: list = None,
                fontsize: int = 8):
-
     fig, ax = plt.subplots(4, 4)
     fig.subplots_adjust(hspace=0, wspace=0)
 
@@ -135,3 +136,61 @@ def plot_debug(prediction: torch.Tensor,
     if file_name is not None:
         plt.savefig(file_name, dpi=800)
     plt.close()
+
+
+def visualize_segmentations(images_folder: str,
+                            ground_truth_folder: str,
+                            predictions_folder: str,
+                            baseline_folder: str,
+                            output_folder: str,
+                            modality_id: str = '0001') -> None:
+    """
+
+    Args:
+
+        images_folder:
+        ground_truth_folder:
+        predictions_folder:
+        baseline_folder:
+        output_folder:
+        modality_id:
+
+    Returns:
+
+    """
+
+    masks = os.listdir(ground_truth_folder)
+    for mask in masks:
+
+        # file name
+        name = mask.split('.nii.gz')[0]
+        try:
+            # read image, mask, prediction and ground truth
+            all_files = [
+                glob.glob(os.path.join(images_folder, f"{name}_{modality_id}.*"))[0],
+                os.path.join(ground_truth_folder, f"{name}.nii.gz"),
+                os.path.join(predictions_folder, f"{name}.nii.gz"),
+                os.path.join(baseline_folder, f"{name}.nii.gz"),
+            ]
+
+            all_images = []
+            for file in all_files:
+                image = sitk.ReadImage(file)
+                image = sitk.GetArrayFromImage(image)
+                all_images.append(image.squeeze(0))
+
+            # plot results
+            fig, ax = plt.subplots(1, 3)
+            titles = ["Ground Truth", "Prediction", "Baseline"]
+            for i in range(0, 3):
+                ax[i].imshow(all_images[0], cmap="gray")
+                ax[i].imshow(np.ma.masked_where(all_images[i + 1] == 0, all_images[i + 1]), alpha=0.65)
+                ax[i].set_title(titles[i], fontsize=8)
+                ax[i].set_axis_off()
+
+            plt.savefig(os.path.join(output_folder, f"{name}.jpeg"), dpi=300)
+            plt.close()
+
+        except Exception as ex:
+            raise RuntimeError(f"Error plotting file {name}\n\n"
+                               f"Exception: {ex}")

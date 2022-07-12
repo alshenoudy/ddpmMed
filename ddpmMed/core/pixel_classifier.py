@@ -13,13 +13,20 @@ class Classifier(nn.Module):
         self.in_features = in_features
         self.num_classes = num_classes
         self.model = nn.Sequential(
-            nn.Linear(self.in_features, 128),
+
+            nn.Linear(self.in_features, 256),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=256),
+
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.BatchNorm1d(num_features=128),
-            nn.Linear(128, 32),
+
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.BatchNorm1d(num_features=32),
-            nn.Linear(32, num_classes),
+            nn.BatchNorm1d(num_features=64),
+
+            nn.Linear(64, num_classes),
             nn.ReLU())
 
     def init_weights(self, init_type='normal', gain=0.02):

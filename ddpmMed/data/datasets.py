@@ -51,7 +51,7 @@ class SegmentationDataset(Dataset):
 
         # define transforms
         if self.transforms is None:
-            self.transforms = t.Compose([
+            self.transforms_train = t.Compose([
                 t.Resize(self.image_size),
                 t.CenterCrop(self.image_size),
                 t.RandomHorizontalFlip(0.5),
@@ -65,6 +65,11 @@ class SegmentationDataset(Dataset):
                 t.PILToTensor(),
                 t.Lambda(lambda v: (v * 2) - 1)
             ])
+
+        if self.train:
+            self.transforms = self.transforms_train
+        else:
+            self.transforms = self.transforms_test
 
         # validate directories
         if not bf.exists(self.images_dir):
@@ -117,6 +122,12 @@ class SegmentationDataset(Dataset):
 
     def __len__(self):
         return len(self.dataset)
+
+    def set_test_transforms(self):
+        self.transforms = self.transforms_test
+
+    def set_train_transforms(self):
+        self.transforms = self.transforms_train
 
     def __getitem__(self, item) -> Tuple[torch.Tensor, torch.Tensor]:
 

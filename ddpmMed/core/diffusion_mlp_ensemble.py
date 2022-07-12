@@ -16,6 +16,7 @@ from ddpmMed.insights.plots import plot_result
 from ddpmMed.utils.data import scale_features, torch2np
 from ddpmMed.core.pixel_classifier import Classifier
 from monai.losses import DiceCELoss
+import SimpleITK as sitk
 
 
 class DiffusionMLPEnsemble:
@@ -128,6 +129,8 @@ class DiffusionMLPEnsemble:
                 'classifier_id': i,
                 'model': self.ensemble[i].__module__,
                 'initialization_method': initialization,
+                'input_features': self.in_features,
+                'num_classes': num_classes,
                 'device': self.device,
                 'trained': False,
                 'epoch': 0
@@ -313,11 +316,12 @@ class DiffusionMLPEnsemble:
                  indices: list,
                  filenames: list,
                  plot_predictions: bool = True,
-                 save_to: str = None,
-                 as_np: bool = False):
+                 export_predictions: bool = True,
+                 save_to: str = None):
         """
         Args:
 
+            export_predictions:
             plot_predictions:
             data:
             indices:
@@ -334,13 +338,20 @@ class DiffusionMLPEnsemble:
         metrics_results = OrderedDict()
         running_metrics = None
 
+        if export_predictions:
+            os.makedirs(os.path.join(save_to, 'nifti_predictions'), exist_ok=True)
+
         with tqdm(enumerate(indices), total=total_items) as pbar:
             for i, idx in pbar:
                 x, y = data[idx]
                 filename = os.path.basename(data.dataset[idx]['mask'])
+                filename = filename.split('.tif')[0]
+                filename = filename.split('_')
+                filename = f"BraTS_{int(filename[1]):05d}s{int(filename[2]):03d}"
+                pbar.set_description(f"Evaluating {filename}")
 
                 pred = self.predict(x)
-                metrics_results[filename] = metrics.calculate_all_brats(
+                metrics_results[filename] = metrics(
                     prediction=torch2np(pred),
                     ground_truth=torch2np(y, squeeze=True)
                 )
@@ -363,6 +374,15 @@ class DiffusionMLPEnsemble:
                         ],
                         file_name=os.path.join(save_to, f"{i:05d}.jpeg")
                     )
+                if export_predictions:
+                    image = torch2np(pred).astype(np.uint8)
+                    image = sitk.JoinSeries(sitk.GetImageFromArray(image))
+                    image.SetOrigin([0, 0, 0])
+                    image.SetSpacing([1, 1, 999])
+                    sitk.WriteImage(image=image, fileName=os.path.join(save_to,
+                                                                       'nifti_predictions',
+                                                                       f"{filename}.nii.gz"))
+
             metrics_results['mean'] = {key: np.nanmean(running_metrics[key]) for key in running_metrics.keys()}
             with open(os.path.join(save_to, "prediction_scores.json"), 'w') as jf:
                 json.dump(metrics_results, jf)
