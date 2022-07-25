@@ -196,31 +196,14 @@ def balance_labels(x: torch.Tensor, y: torch.Tensor):
 
 
 def brats_labels(mask: torch.Tensor) -> torch.Tensor:
-    """ map brats labels """
+    """
+    0: Background
+    1 -> 2: Necrotic Tumor Core
+    2 -> 1: Non-Enhancing Tumor
+    4 -> 3: Enhancing Tumor
+    """
     mask_copy = torch.zeros_like(mask)
-    mask_copy[mask == 4] = 3
-    mask_copy[mask == 1] = 2
-    mask_copy[mask == 2] = 1
+    # mask_copy[mask == 4] = 3
+    mask_copy[mask == 1] = 1
+    # mask_copy[mask == 2] = 1
     return mask_copy
-
-
-def binary_brats(mask: torch.Tensor) -> torch.Tensor:
-    """ whole tumor for brats """
-    mask[mask > 0] = 1
-    return mask
-
-
-def brats_tumor_core(mask: torch.Tensor) -> torch.Tensor:
-    """tumor core for brats """
-    mask[mask == 4] = 3
-    mask[mask == 2] = 0
-    mask[mask > 1] = 1
-    return mask
-
-
-def brats_ET(mask: torch.Tensor) -> torch.Tensor:
-    """ Enhancing Tumor for brats"""
-    mask[mask == 4] = 3
-    mask[mask < 3] = 0
-    mask[mask > 1] = 1
-    return mask

@@ -5,9 +5,10 @@ from typing import Callable, Tuple
 from torch.utils.data import random_split, DataLoader
 from tqdm import tqdm
 
-from ddpmMed.core.diffusion_mlp_ensemble import DiffusionMLPEnsemble
+from ddpmMed.core.mlp_ensemble import DiffusionMLPEnsemble
 from ddpmMed.data.datasets import SegmentationDataset, PixelDataset
 from Experiments.config import brats_128x128_config
+from ddpmMed.insights.evaluator import NiftiEvaluator
 from ddpmMed.utils.data import dump_brats_dataset, prepare_brats_pixels
 
 
@@ -33,14 +34,18 @@ def mlp_experiment(
         batch_size: int,
         num_classes: int,
         ensemble_size: int,
+        architecture: str,
         initialization: str,
+        evaluate_test_nifti_folder: str,
         load_trained_ensemble: str = None,
         label_names: dict = None,
         map_labels: Callable = None,
         device: str = 'cpu',
         dump_train: bool = True,
         dump_val: bool = True,
-        dump_test: bool = False) -> None:
+        dump_test: bool = False,
+        label_weights=None) -> None:
+
     """
     Runs a Diffusion MLP Ensemble on a given configuration/data split and saves results to disk.
 
@@ -108,6 +113,9 @@ def mlp_experiment(
         print(f"output_dir is None, using current directory to save results ..")
         output_dir = os.getcwd()
 
+    if label_weights is None and num_classes == 4:
+        label_weights = torch.tensor([0.1, 0.3, 0.3, 0.3])
+
     # different seeds for data splits
     seed_0, seed_1 = seeds
 
@@ -132,6 +140,7 @@ def mlp_experiment(
         'mlp_epochs': epochs,
         'batch_size': batch_size,
         'classes': num_classes,
+        'architecture': architecture,
         'initialization': initialization,
         'load_pretrained_ensemble': load_trained_ensemble,
         'evaluate_validation_set': evaluate_val,
@@ -254,7 +263,8 @@ def mlp_experiment(
         ensemble_size=ensemble_size,
         init_weights=initialization,
         device=device,
-        cache_dir=output_dir
+        cache_dir=output_dir,
+        architecture=architecture
     )
 
     # Create pixel dataset
@@ -286,7 +296,7 @@ def mlp_experiment(
             validate_every=validate_every,
             use_dice_loss=False,
             include_background=True,
-            ce_weight=torch.tensor([0.1, 0.3, 0.3, 0.3]))
+            ce_weight=label_weights)
 
     # after training is complete remove unnecessary objects/params
     del x_valid_data, y_valid_data
@@ -301,21 +311,30 @@ def mlp_experiment(
         print(f"\nEvaluating Validation Data ..")
         pred_val_dir = os.path.join(output_dir, "Predictions", "Validation Data")
         os.makedirs(name=pred_val_dir, exist_ok=True)
-        mlp_ensemble.evaluate(data=dataset,
-                              indices=data_split_info["validation"]["ids"],
-                              filenames=data_split_info["validation"]["files"],
-                              plot_predictions=plot_predictions,
-                              save_to=pred_val_dir)
+        mlp_ensemble.predict_and_export(data=dataset,
+                                        indices=data_split_info["validation"]["ids"],
+                                        plot_predictions=plot_predictions,
+                                        save_to=pred_val_dir)
+
         print(f"Evaluated Validation Data\n\n")
 
     if evaluate_test:
         print(f"\nEvaluating Test Data ..")
         pred_test_dir = os.path.join(output_dir, "Predictions", "Test Data")
         os.makedirs(name=pred_test_dir, exist_ok=True)
-        mlp_ensemble.evaluate(data=dataset,
-                              indices=data_split_info["test"]["ids"],
-                              filenames=data_split_info["test"]["files"],
-                              plot_predictions=plot_predictions,
-                              save_to=pred_test_dir)
+        mlp_ensemble.predict_and_export(data=dataset,
+                                        indices=data_split_info["test"]["ids"],
+                                        plot_predictions=plot_predictions,
+                                        save_to=pred_test_dir)
+        if evaluate_test_nifti_folder is not None:
+            if os.path.exists(evaluate_test_nifti_folder):
+                nifti_evaluator = NiftiEvaluator(
+                    predictions=os.path.join(pred_test_dir, 'nifti_predictions'),
+                    references=evaluate_test_nifti_folder,
+                    labels=label_names)
+                nifti_evaluator.evaluate_folders(output_dir=pred_test_dir)
         print(f"Evaluated Test Data\n\n")
+
+
+
 

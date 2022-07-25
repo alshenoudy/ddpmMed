@@ -1,8 +1,5 @@
 import os
-import sys
 import json
-
-import matplotlib.pyplot as plt
 import torch
 import numpy as np
 from torch import nn
@@ -48,8 +45,10 @@ class DiffusionMLPEnsemble:
                  ensemble_size: int,
                  init_weights: str,
                  device: str = 'cpu',
-                 cache_dir: str = os.getcwd()) -> None:
+                 cache_dir: str = os.getcwd(),
+                 architecture: str = 'simple') -> None:
 
+        self.architecture = architecture
         self.time_steps = time_steps
         self.layers = layers
         self.diffusion_model_path = trained_diffusion_model
@@ -121,7 +120,8 @@ class DiffusionMLPEnsemble:
 
             # create classifier
             self.ensemble[i] = Classifier(in_features=self.in_features,
-                                          num_classes=self.num_classes).to(self.device)
+                                          num_classes=self.num_classes,
+                                          architecture=self.architecture).to(self.device)
 
             # init weights and save metadata
             self.ensemble[i].init_weights(init_type=initialization)
@@ -311,24 +311,20 @@ class DiffusionMLPEnsemble:
 
         return x_pred
 
-    def evaluate(self,
-                 data: SegmentationDataset,
-                 indices: list,
-                 filenames: list,
-                 plot_predictions: bool = True,
-                 export_predictions: bool = True,
-                 save_to: str = None):
+    def predict_and_export(self,
+                           data: SegmentationDataset,
+                           indices: list,
+                           plot_predictions: bool = True,
+                           export_predictions: bool = True,
+                           save_to: str = None):
         """
+        Predicts all items in a Dataset and exports them, optionally also plot them
         Args:
-
-            export_predictions:
-            plot_predictions:
+            export_predictions: Flag to export .nii.gz predictions
+            plot_predictions: Flag to plot predictions or not, against ground truth
             data:
             indices:
-            filenames:
             save_to:
-            as_np:
-
         Returns:
         """
 
@@ -351,15 +347,6 @@ class DiffusionMLPEnsemble:
                 pbar.set_description(f"Evaluating {filename}")
 
                 pred = self.predict(x)
-                metrics_results[filename] = metrics(
-                    prediction=torch2np(pred),
-                    ground_truth=torch2np(y, squeeze=True)
-                )
-                if running_metrics is None:
-                    running_metrics = {key: [] for key in metrics_results[filename].keys()}
-                else:
-                    for key in metrics_results[filename].keys():
-                        running_metrics[key].append(metrics_results[filename][key])
 
                 # plot/save predictions, not saving saves a lot of disk space
                 if plot_predictions:
@@ -382,9 +369,4 @@ class DiffusionMLPEnsemble:
                     sitk.WriteImage(image=image, fileName=os.path.join(save_to,
                                                                        'nifti_predictions',
                                                                        f"{filename}.nii.gz"))
-
-            metrics_results['mean'] = {key: np.nanmean(running_metrics[key]) for key in running_metrics.keys()}
-            with open(os.path.join(save_to, "prediction_scores.json"), 'w') as jf:
-                json.dump(metrics_results, jf)
-            jf.close()
 

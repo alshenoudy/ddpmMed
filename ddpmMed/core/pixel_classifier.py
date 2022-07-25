@@ -1,33 +1,75 @@
-import os
 import torch
-import numpy as np
 from torch import nn
-from tqdm import tqdm
-from torch.utils.data import DataLoader
-from monai.losses import DiceLoss, DiceCELoss
 
 
 class Classifier(nn.Module):
-    def __init__(self, in_features: int, num_classes: int) -> None:
+    def __init__(self, in_features: int, num_classes: int, architecture: str = 'simple') -> None:
         super(Classifier, self).__init__()
         self.in_features = in_features
         self.num_classes = num_classes
-        self.model = nn.Sequential(
+        self.architecture = architecture
 
-            nn.Linear(self.in_features, 256),
-            nn.ReLU(),
-            nn.BatchNorm1d(num_features=256),
+        if architecture is None:
+            self.architecture = 'simple'
+        elif self.architecture.lower() not in ['simple', 'wide', 'deep', 'deep_wide']:
+            raise ValueError(f"unknown architecture type: {self.architecture}, should be one of"
+                             f" ['simple', 'wide', 'deep']")
 
-            nn.Linear(256, 128),
+        self.simple = nn.Sequential(
+            nn.Linear(self.in_features, 128),
             nn.ReLU(),
             nn.BatchNorm1d(num_features=128),
-
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.BatchNorm1d(num_features=64),
+            nn.Linear(64, num_classes))
 
-            nn.Linear(64, num_classes),
-            nn.ReLU())
+        self.wide = nn.Sequential(
+            nn.Linear(self.in_features, 256),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=256),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=128),
+            nn.Linear(128, num_classes))
+
+        self.deep = nn.Sequential(
+            nn.Linear(self.in_features, 256),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=256),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=128),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=64),
+            nn.Linear(64, num_classes)
+        )
+
+        self.deep_wide = nn.Sequential(
+            nn.Linear(self.in_features, 512),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=512),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=256),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=128),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.BatchNorm1d(num_features=64),
+            nn.Linear(64, self.num_classes)
+        )
+
+        if self.architecture == 'simple':
+            self.model = self.simple
+        elif self.architecture == 'wide':
+            self.model = self.wide
+        elif self.architecture == 'deep':
+            self.model = self.deep
+        elif self.architecture == 'deep_wide':
+            self.model = self.deep_wide
 
     def init_weights(self, init_type='normal', gain=0.02):
         """
@@ -59,106 +101,3 @@ class Classifier(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
-
-
-class Ensemble:
-    """
-    An ensemble of classifiers
-    """
-
-    def __init__(self,
-                 in_features: int,
-                 num_classes: int,
-                 size: int = 10,
-                 init_weights: str = "random",
-                 device: str = 'cpu') -> None:
-
-        self.in_features = in_features
-        self.num_classes = num_classes
-        self.size = size
-        self.init_weights = init_weights.lower()
-        self.ensemble = []
-        self.device = device
-        self.softmax = nn.Softmax(dim=1)
-        init_functions = ['normal', 'xavier', 'kaiming', 'orthogonal']
-
-        # create ensemble
-        for i in range(0, self.size):
-
-            # create nth classifier object
-            classifier = Classifier(in_features=self.in_features,
-                                    num_classes=self.num_classes).to(self.device)
-
-            # initialize weights accordingly
-            if self.init_weights == "random":
-                classifier.init_weights(init_type=np.random.choice(init_functions))
-            else:
-                classifier.init_weights(init_type=self.init_weights)
-
-            self.ensemble.append(classifier)
-        print(f"Created ensemble with {self.size} classifiers\n")
-
-    def load_ensemble(self, ensemble_folder: str):
-        """ loads a pretrained ensemble from a directory """
-        if not os.path.exists(ensemble_folder):
-            raise FileExistsError(f" ensemble folder ({ensemble_folder}) does not exist")
-
-        classifiers = os.listdir(ensemble_folder)
-        classifiers = [os.path.join(ensemble_folder, c) for c in classifiers if c.split('.')[-1].lower() == 'pt']
-
-        if len(classifiers) != self.size:
-            raise RuntimeError(f"ensemble size and found classifiers do not match ({len(classifiers)} != {self.size})")
-        for i in range(0, self.size):
-            self.ensemble[i].load_state_dict(torch.load(classifiers[i], map_location=self.device))
-
-    def train(self,
-              epochs: int,
-              data: DataLoader,
-              lr: float = 0.0001,
-              cache_folder: str = os.getcwd()):
-        """
-        Trains each classifier in an ensemble, uses Adam as an optimizer
-        """
-        # define criterion and cache dir
-        dice_ce_loss = DiceCELoss(
-            to_onehot_y=True,
-            softmax=True,
-            lambda_dice=0.88
-        )
-        criterion_0 = nn.CrossEntropyLoss()
-        criterion_1 = nn.CrossEntropyLoss(ignore_index=0)
-        cache_folder = os.path.join(cache_folder, "ensemble")
-        if not os.path.exists(cache_folder):
-            os.makedirs(cache_folder, exist_ok=True)
-
-        # Train each classifier in ensemble separately
-        for i, classifier in enumerate(self.ensemble):
-
-            # define optimizer for current classifier
-            optimizer = torch.optim.Adam(classifier.parameters(), lr=lr)
-
-            with tqdm(range(0, epochs), postfix={"batch_loss": "N/A"}) as pbar:
-                pbar.set_description(f"Training Classifier [{i}]")
-                for e in pbar:
-                    for x, y in data:
-                        optimizer.zero_grad()
-                        predictions = classifier(x)
-                        # loss = criterion_0(predictions, y) + (0.98 * criterion_1(predictions, y))
-                        loss = dice_ce_loss(predictions, y.unsqueeze(-1))
-                        loss.backward()
-                        optimizer.step()
-                        pbar.set_postfix({
-                            "batch_loss": "{:.6f}".format(loss.item())
-                        })
-
-                # save current model
-                torch.save(obj=classifier.state_dict(), f=os.path.join(cache_folder, f"classifier_{i}.pt"))
-
-    def predict(self, x: torch.Tensor):
-        """
-        Ensemble voting over pixels
-        """
-        x_pred = [torch.argmax(self.softmax(c(x)), dim=1) for c in self.ensemble]
-        x_pred = torch.stack(x_pred)
-        x_pred = torch.mode(x_pred, dim=0)[0]
-        return x_pred
